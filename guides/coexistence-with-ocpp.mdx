@@ -1,13 +1,13 @@
 ---
 title: "Coexisting with OCPP"
-description: "How the Tellus Open Platform API runs alongside your existing OCPP-based CPMS — and why it's designed that way."
+description: "How the Tellus Open Platform API runs alongside your existing OCPP-based CPMS — entirely under customer control, with clear data-sovereignty guarantees."
 ---
 
-Tellus chargers can operate **two simultaneous backend connections** on a single device: one to your existing OCPP-based Charging Point Management System (CPMS), and one to the Tellus Open Platform API. This is intentional, important, and unique to the platform.
+Tellus chargers running firmware 260420.0107 or later support a **customer-configurable second backend** — the capability to enable an Open Platform API channel alongside the OCPP connection to your existing Charging Point Management System (CPMS). The second channel is opt-in, customer-controlled, and never operates as an undisclosed parallel connection. This guide explains how it works, when to use it, and what data-sovereignty guarantees apply.
 
 ## The dual-platform model
 
-Most charger-management ecosystems force a choice: either your charger talks to a CPMS via OCPP, *or* it talks to a vendor-specific platform. Tellus chargers do both, simultaneously, against separate backends.
+Most charger-management ecosystems force a choice: either your charger talks to a CPMS via OCPP, *or* it talks to a vendor-specific platform. Tellus chargers can do both — when the customer chooses to enable it. The OCPP channel always handles operational session management with your CPMS. The Open Platform API channel runs only when the customer (or Tellus, acting with the customer's explicit authorisation) configures it.
 
 ```
                     ┌──────────────────────┐
@@ -19,32 +19,34 @@ Most charger-management ecosystems force a choice: either your charger talks to 
                     ┌──────────┴───────────┐
                     │                      │
            ┌────────▼────────┐    ┌────────▼─────────────┐
-           │  OCPP 1.6-J /   │    │   Open Platform      │
-           │   OCPP 2.0.1    │    │   API (REST + WS)    │
+           │  OCPP 1.6-J /   │    │   Open Platform API  │
+           │   OCPP 2.0.1    │    │   (REST + WS)        │
+           │  (always)       │    │   — opt-in —         │
            └────────┬────────┘    └────────┬─────────────┘
                     │                      │
            ┌────────▼────────┐    ┌────────▼─────────────┐
            │  Your CPMS      │    │  Tellus-side service │
-           │  (Driivz,       │    │  (diagnostics,       │
-           │   ChargePoint,  │    │   AI agents, V2G,    │
-           │   Spirii, etc.) │    │   energy services)   │
+           │  (Driivz,       │    │  (only when          │
+           │   ChargePoint,  │    │   customer enables;  │
+           │   Spirii, etc.) │    │   diagnostics, V2G,  │
+           │                 │    │   energy services)   │
            └─────────────────┘    └──────────────────────┘
 ```
 
-The two channels point at separate backends, carry different traffic, and don't interfere with each other.
+The two channels point at separate backends, carry different traffic, and don't interfere with or share data with each other internally.
 
 ## Why two channels?
 
 The split reflects a deliberate strategic choice:
 
 - **OCPP** is the open standard for *operational* charger management — sessions, billing, customer apps, network access control. The CPMS market is mature and competitive (Driivz, ChargePoint, Spirii, Monta, Has·to·Be, EVConnect, AmpUp, and many more). Tellus does not compete in this market.
-- **The Open Platform API** is for *value-added services* that benefit from hardware-level access — diagnostics, predictive maintenance, V2G dispatch, EMS integration, fault clustering, component-level health. These are services Tellus and select integrators provide *on top of* whatever CPMS the customer has chosen.
+- **The Open Platform API** is for *value-added services* that benefit from hardware-level access — diagnostics, predictive maintenance, V2G dispatch, EMS integration, fault clustering, component-level health. These are services Tellus and select integrators can provide *on top of* whatever CPMS the customer has chosen, when the customer authorises that channel.
 
-By offering both channels, Tellus chargers fit cleanly into any CPMS partner's ecosystem while still enabling deeper diagnostic and energy-services capabilities.
+By offering both channels — and giving customers explicit control over which is enabled — Tellus chargers fit cleanly into any CPMS partner's ecosystem while still enabling deeper diagnostic and energy-services capabilities for customers who want them.
 
 ## Firmware requirements
 
-Simultaneous backends require firmware **260420.0107 or later**. Earlier firmware accepts only one backend connection at a time.
+The customer-configurable second backend requires firmware **260420.0107 or later**. Earlier firmware accepts only one backend connection at a time.
 
 To check a charger's firmware, query its details via `GET /v1/operator/devices/{device_id}` and inspect the `firmware_version` field. To plan a fleet upgrade, use the firmware rollout endpoints described in the API Reference.
 
@@ -69,16 +71,37 @@ Where both columns are populated, choose based on which platform's tooling you w
 
 ### Pattern 1 — CPMS partner with diagnostic add-on
 
-Your existing CPMS handles all session operations via OCPP. A Tellus-side service consumes the Open Platform API for predictive maintenance and diagnostic alerting, surfacing findings back to your operations team — without touching your CPMS data model.
+Your existing CPMS handles all session operations via OCPP. With the customer's authorisation, a Tellus-side service consumes the Open Platform API for predictive maintenance and diagnostic alerting, surfacing findings back to your operations team — without touching your CPMS data model.
 
 ### Pattern 2 — Microgrid / behind-the-meter operator
 
-You run a small fleet (typically fewer than 50 chargers) for a private application — a depot, a campus, a microgrid. You consume the Open Platform API for full operational control (start, stop, schedule, flexibility) without needing a separate CPMS at all.
+You run a small fleet (typically fewer than 50 chargers) for a private application — a depot, a campus, a microgrid. You consume the Open Platform API directly for full operational control (start, stop, schedule, flexibility) without needing a separate CPMS at all.
 
 ### Pattern 3 — V2G / grid-services integrator
 
-Your CPMS partner handles routine charging via OCPP. Your team subscribes to the Open Platform API for V2G dispatch, demand-response participation, and aggregated energy reporting — services your CPMS may not offer.
+Your CPMS partner handles routine charging via OCPP. With the customer's authorisation, your team subscribes to the Open Platform API for V2G dispatch, demand-response participation, and aggregated energy reporting — services your CPMS may not offer.
+
+## Customer control and data sovereignty
+
+The Open Platform API channel is **opt-in and customer-configurable**. It operates only when the customer (or Tellus, acting with the customer's explicit authorisation) chooses to enable it. Customers can audit which Tellus services are receiving data, request changes to the data flow, or disable the channel entirely at any time.
+
+The OCPP channel that connects to your CPMS continues to be governed entirely by your CPMS partner's policies — Tellus has no separate visibility into OCPP traffic, and the two channels do not share data internally.
+
+### Where data is hosted
+
+For European customers, the deployment region of the Open Platform API matters. Tellus's preferred deployment for EU partners is **UK-hosted Open Platform infrastructure**:
+
+- Charger telemetry stays inside EU jurisdiction
+- GDPR data controllers and processors are clearly defined and verifiable
+- Aligned with NIS2 directive expectations for critical-infrastructure equipment
+- No cross-border data-transfer concerns by default
+
+If you have specific data-sovereignty requirements — a particular region, data-residency contractual terms, or audit obligations — contact Tellus before integration to confirm the deployment region for your fleet. We can typically deploy region-specific Open Platform infrastructure to match your requirements.
+
+### What we record
+
+When the Open Platform API channel is enabled, Tellus records the data described in the API Reference — telemetry frames, fault events, charging records, configuration state — for the purposes of diagnostics, predictive maintenance, V2G dispatch (where authorised), and aggregated energy reporting. Personal data such as VINs and driver-identity information is handled in line with GDPR and the data-processing agreement between Tellus and your organisation.
 
 ## What this means for partners
 
-Tellus's commitment to non-competition with CPMS partners is a deliberate go-to-market position. You're encouraged to integrate Tellus chargers into your platform without concern that we'll one day compete for the operational layer. The Open Platform API exists to *complement* what you do, not replace it.
+Tellus's commitment to non-competition with CPMS partners is a deliberate go-to-market position. You're encouraged to integrate Tellus chargers into your platform without concern that we'll one day compete for the operational layer. The Open Platform API exists to *complement* what you do — at the customer's invitation, with transparent control over data flow — not to replace it.
