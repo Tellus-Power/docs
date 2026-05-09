@@ -13,6 +13,10 @@
       "name": "Proprietary \u2014 Tellus Power Group"
     }
   },
+  "externalDocs": {
+    "description": "Tellus Power developer documentation \u2014 guides, diagnostics, runbooks, and proposed API extensions",
+    "url": "https://developers.telluspowergroup.com"
+  },
   "servers": [
     {
       "url": "https://api.telluspower.example.com/v1",
@@ -1630,6 +1634,10 @@
         ],
         "summary": "Get charger details",
         "description": "Retrieves detailed information about a specific charger, including connector states.",
+        "externalDocs": {
+          "description": "Proposed component-health and OCPP-metadata extensions to this entity",
+          "url": "https://developers.telluspowergroup.com/diagnostics/proposed-extensions"
+        },
         "security": [
           {
             "operatorOAuth2": [
@@ -1687,6 +1695,10 @@
         ],
         "summary": "Remote start charging",
         "description": "Remotely start charging on a specific connector.",
+        "externalDocs": {
+          "description": "Runbook for \"Connector stuck in Preparing state\" \u2014 for diagnosing failed start attempts",
+          "url": "https://developers.telluspowergroup.com/diagnostics/runbooks"
+        },
         "security": [
           {
             "operatorOAuth2": [
@@ -1833,6 +1845,10 @@
         ],
         "summary": "Remote discharge (V2G)",
         "description": "Initiates vehicle-to-grid discharging on a connector. Only valid for V2G-capable hardware.",
+        "externalDocs": {
+          "description": "Runbook for \"V2G discharge initiated but power not flowing\" \u2014 including ISO 15118-20 negotiation and BMS-refusal scenarios",
+          "url": "https://developers.telluspowergroup.com/diagnostics/runbooks"
+        },
         "security": [
           {
             "operatorOAuth2": [
@@ -1978,6 +1994,10 @@
         ],
         "summary": "Query charging records",
         "description": "Retrieves historical charging records, optionally filtered by device, connector, or time range.",
+        "externalDocs": {
+          "description": "Fault dictionary \u2014 for interpreting fault-related stop_reasons in charging records",
+          "url": "https://developers.telluspowergroup.com/diagnostics/fault-dictionary"
+        },
         "security": [
           {
             "operatorOAuth2": [
@@ -2362,6 +2382,10 @@
         ],
         "summary": "Heartbeat",
         "description": "Periodic (e.g., every 30 seconds) report from the charger of online\nstatus. The response may include pending commands queued for the device.\n",
+        "externalDocs": {
+          "description": "Connectivity diagnostic runbook for stale-heartbeat and reconnect-storm scenarios",
+          "url": "https://developers.telluspowergroup.com/diagnostics/runbooks"
+        },
         "security": [
           {
             "deviceBearer": []
@@ -2420,6 +2444,10 @@
         ],
         "summary": "Real-time telemetry upload",
         "description": "Periodic upload of real-time electrical telemetry (typically every 5\nseconds during charging or discharging). Supports single-phase and\nthree-phase via the optional `phase_details` block.\n",
+        "externalDocs": {
+          "description": "Proposed component-level telemetry fields (contactor cycles, fan RPM, isolation tests, V2G inverter health)",
+          "url": "https://developers.telluspowergroup.com/diagnostics/proposed-extensions"
+        },
         "security": [
           {
             "deviceBearer": []
@@ -2460,6 +2488,10 @@
         ],
         "summary": "Event reporting",
         "description": "Reports device events such as plug-in, plug-out, charging start /\nstop, faults, and alarms.\n",
+        "externalDocs": {
+          "description": "Fault code reference for interpreting `event_type=fault` payloads",
+          "url": "https://developers.telluspowergroup.com/diagnostics/fault-dictionary"
+        },
         "security": [
           {
             "deviceBearer": []
@@ -2548,6 +2580,10 @@
         ],
         "summary": "Fetch pending command (long polling)",
         "description": "The charger polls for pending commands using long polling. If no\ncommand is available, the request hangs until the timeout expires\n(default 30 seconds, max 60) or a command arrives.\n",
+        "externalDocs": {
+          "description": "Proposed remote diagnostic command types (reboot, run_self_test, calibrate_sensor, fetch_logs, etc.)",
+          "url": "https://developers.telluspowergroup.com/diagnostics/proposed-extensions"
+        },
         "security": [
           {
             "deviceBearer": []
