@@ -1,0 +1,188 @@
+---
+title: "Diagnostic runbooks"
+description: "Step-by-step playbooks for the most common diagnostic situations encountered with Tellus chargers — written for field engineers and partner tech teams."
+---
+
+<Note>
+Runbooks are written by the Tellus tech team based on accumulated field experience. Each runbook captures tribal knowledge — what to check, in what order, and when to escalate — so a first responder can resolve an incident without recreating the diagnostic path from scratch.
+</Note>
+
+These runbooks are designed to be actionable by **partner tech teams** as well as Tellus's own field engineers. Most assume access to the Open Platform API for live telemetry; where on-site presence is required, that's flagged explicitly.
+
+## Charger faulting on power-up
+
+**Applicable models:** TP-DC180, TP-DC360 (DC fast and ultra-fast units). For AC chargers, use the AC variant of this runbook.
+
+**Symptom:** Charger fails to reach `online` state after a power cycle, or transitions briefly to `online` and then to `fault`.
+
+<Steps>
+
+<Step title="Verify supply power">
+Confirm the charger is receiving correctly-phased AC supply. For three-phase units, all three phases must be present and balanced within ±5%.
+
+- *Auto-verify:* Check the most recent telemetry frame; if `voltage` reads within nominal envelope, this step is verified.
+- *On-site:* Multimeter at the cabinet input terminals.
+</Step>
+
+<Step title="Check fault event log">
+Pull the most recent 10 fault events for the affected device via `GET /v1/operator/devices/{device_id}` (events tab). The pattern of codes is the diagnostic signal.
+
+- A single F-0411 (power module communication timeout): proceed to step 3.
+- A cluster of F-0421 (contactor failed to engage): jump to step 5 — likely firmware.
+- F-0204 (cabinet over-temp) on power-up: cooling-system issue; pause and investigate F-0204 runbook.
+- Any V2G code (F-0701, F-0702): see V2G runbook below.
+</Step>
+
+<Step title="Verify firmware version">
+Compare the charger's `firmware_version` against the latest stable build for its model.
+
+- TP-DC180 latest: 3.1.0
+- TP-DC360 latest: 4.0.0 (or 4.1.0 if you've upgraded for V2G fixes)
+
+If firmware is more than two minor versions behind, schedule an upgrade via the Firmware section of the API Reference.
+</Step>
+
+<Step title="Issue a controlled reboot">
+Use the proposed `reboot` command (see [Proposed extensions](/diagnostics/proposed-extensions)) to issue a soft reboot. If the command isn't yet implemented in your environment, an on-site engineer can power-cycle the unit.
+
+- Wait 90 seconds for the charger to complete its boot sequence.
+- Confirm `last_heartbeat` is fresh (less than 60 seconds ago) and `status` is `online`.
+</Step>
+
+<Step title="Firmware-cluster check">
+If F-0421 was prominent in step 2, query the broader fleet for the same code over the last 7 days. If multiple chargers across distinct sites show the same fault on the same firmware version, the issue is firmware-related, not hardware.
+
+- *Resolution:* roll out the latest stable build to the affected firmware cohort. Don't replace contactors.
+- *Reference:* F-0421 known issue affects 3.0.0–3.0.2.
+</Step>
+
+<Step title="Escalate to on-site engineer">
+If steps 1–5 don't resolve the fault, dispatch an on-site engineer with:
+
+- The fault event log from step 2
+- The firmware version
+- Any thermal anomalies from concurrent telemetry
+- Mark the incident "Escalated to L2" via your operations console
+
+Mark resolved or escalate.
+</Steps>
+
+---
+
+## Connector stuck in `Preparing` state
+
+**Applicable models:** All. Most common on AC wallboxes (TP-AC22) and DC fast (TP-DC60, TP-DC180).
+
+**Symptom:** Plug-in event registers, but the connector never transitions from `state: "preparing"` to `state: "charging"`. Vehicle reports "waiting" or "ready to charge" indefinitely.
+
+<Steps>
+
+<Step title="Check vehicle handshake">
+The Preparing state covers the connector authentication and ISO 15118 handshake. A stall here is most often vehicle-side.
+
+- Ask the driver (or check via partner CPMS) whether the vehicle is reporting any fault on its dashboard.
+- If multiple vehicles fail at the same charger, the issue is charger-side; proceed to step 2.
+- If one vehicle fails across multiple chargers, the issue is vehicle-side; not a Tellus issue.
+</Step>
+
+<Step title="Verify RFID / authentication">
+If the partner CPMS uses RFID or app-based authentication, confirm the auth message reached the charger. Telemetry should show an authentication-success event before the Preparing state begins.
+
+- *Auto-verify:* Look for an `event_type: "auth_ok"` event prior to the stuck state.
+- If absent, the issue is in the auth path — escalate to the partner CPMS team.
+</Step>
+
+<Step title="Check connector state cycling">
+A common cause is intermittent contactor feedback during the close sequence — see F-0421.
+
+- Issue a remote `stop` and then `start` via the API.
+- If the second attempt succeeds, the issue is intermittent — schedule monitoring; if it recurs three times within 7 days, escalate.
+</Step>
+
+<Step title="Inspect physical connector">
+On-site only:
+
+- Visually inspect the connector pins for debris, oxidation, or pin damage.
+- Test latch engagement — a worn latch may not register the locked state required to begin charging.
+- Wipe the connector contacts with isopropyl alcohol and a lint-free cloth.
+</Step>
+
+<Step title="Reset the connector">
+Use the `reset_connector` command (proposed — see [Proposed extensions](/diagnostics/proposed-extensions)) or via on-site power-cycle.
+
+If still stuck after reset and physical inspection passes, escalate to L2 with:
+
+- Fault event log
+- Vehicle make/model that triggered the issue
+- Charger firmware version
+- Photos of the connector pins
+
+Mark resolved or escalate.
+</Steps>
+
+---
+
+## V2G discharge initiated but power not flowing
+
+**Applicable models:** V2G-capable chargers only (TP-DC180 V2G variant, TP-DC360 V2G).
+
+**Symptom:** A discharge command was issued via `POST /v1/operator/devices/{id}/connectors/{c}/discharge` and accepted (returned `command_id`, status `queued`), but the connector never transitions to `state: "discharging"` and no negative power is observed.
+
+<Steps>
+
+<Step title="Verify command acceptance reached the charger">
+Query `GET /v1/operator/commands/{command_id}` to confirm the charger acknowledged the command.
+
+- `queued` → not yet delivered to the charger; check connectivity (F-0301 / F-0302).
+- `accepted` → delivered, charger is processing.
+- `failed` → command rejected; inspect the result payload for the rejection reason.
+</Step>
+
+<Step title="Verify vehicle V2G eligibility">
+Even with an accepted command, the vehicle's BMS must agree to discharge.
+
+- Confirm the connected vehicle is on the partner's V2G-eligibility list (model + firmware version).
+- Check vehicle SOC is above the discharge floor (typically 20%).
+- If F-0702 (BMS refused discharge) appears in the event log, this is the answer — see F-0702 in the [fault dictionary](/diagnostics/fault-dictionary).
+</Step>
+
+<Step title="Check inverter sync">
+The bidirectional inverter must achieve grid synchronisation before power can flow.
+
+- Look for F-0701 (V2G inverter sync lost) in the event log.
+- If present, see F-0701 — this is typically grid-side or firmware-side.
+- *Auto-verify:* Inverter sync status (proposed telemetry field) should read `synced` before discharge initiates.
+</Step>
+
+<Step title="Verify ISO 15118-20 negotiation">
+V2G discharge requires ISO 15118-20 — the older 15118-2 standard does not support bidirectional flow. Negotiation failures appear as faults.
+
+- Confirm the charger's firmware advertises ISO 15118-20 (260420.0107+).
+- If the vehicle reports negotiation failure, check vehicle firmware version against partner documentation.
+- Some Stellantis / Free2move DrossOne vehicles require charger firmware 4.1.0+; older firmware fails negotiation silently.
+</Step>
+
+<Step title="Test with a known-good vehicle">
+If the issue persists and is isolated to one charger:
+
+- Test with a known-good V2G-eligible vehicle if available.
+- If known-good test passes, the original issue is vehicle-side.
+- If known-good test fails, escalate to L2 with the full discharge attempt sequence.
+</Step>
+
+<Step title="Escalate">
+For persistent issues affecting V2G specifically:
+
+- Capture the full event sequence from command issuance through fault.
+- Capture inverter telemetry for the 60 seconds preceding the failure.
+- Note the vehicle make/model/firmware version.
+- Escalate to L2 with all of the above and reference this runbook.
+
+Mark resolved or escalate.
+</Steps>
+
+---
+
+## Reporting new patterns
+
+If you encounter a recurring diagnostic situation not covered by these runbooks, please share with the Tellus tech team via [support@telluspowergroup.com](mailto:support@telluspowergroup.com). Include the symptom, the diagnostic steps you took, and the resolution. We add new runbooks as patterns surface in the field, and your contribution helps every other partner.
