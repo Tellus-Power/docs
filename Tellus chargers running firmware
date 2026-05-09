@@ -162,7 +162,8 @@ Operator endpoints: **60 requests/minute** for queries, **30 requests/minute** f
 </Accordion>
 
 <Accordion title="Coexistence with OCPP">
-Tellus chargers running firmware 260420.0107 and later accept **simultaneous OCPP and Open Platform API connections to separate backends**. Your operational CPMS can keep its OCPP link live (Spirii, Driivz, ChargePoint, your own — any OCPP-compliant CSMS) while a complementary Tellus-side service consumes the Open Platform feed for diagnostics, grid services, or value-added analytics.
+Tellus chargers running firmware 260420.0107+ support a customer-configurable second backend. When you (or Tellus, with your authorisation) enable it, the OCPP link to your CPMS continues to handle session operations while the Open Platform API channel runs in parallel for diagnostic, V2G, and energy services. The second channel is opt-in — never an undisclosed parallel connection.
+See Coexisting with OCPP for the full pattern, including hosting region and data-sovereignty considerations relevant to European deployments.
 
 This is intentional design: Tellus's Open Platform API is *complementary* to your CPMS, not a replacement.
 </Accordion>
