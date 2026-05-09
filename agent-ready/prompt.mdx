@@ -1,0 +1,75 @@
+---
+title: "Embed Shareable AI Prompts in Your Docs Pages"
+description: "Use the Prompt component to display ready-to-use AI prompts on any docs page, with one-click copy or open-in-Cursor actions for your readers."
+icon: "robot"
+---
+
+The `<Prompt>` component displays a pre-built AI prompt on your docs page with a one-click copy button. Readers can grab the prompt and use it directly in their preferred AI assistant. You can also add an "Open in Cursor" button so developers can run the prompt in their editor without leaving the page.
+
+## Basic usage
+
+Add a `<Prompt>` block anywhere on a page:
+
+```mdx
+<Prompt description="Generate a summary of this API endpoint">
+You are a technical writer. Given the following API endpoint documentation,
+write a one-paragraph summary that explains what the endpoint does, what inputs
+it requires, and what it returns. Be concise and use plain language.
+</Prompt>
+```
+
+The `description` prop becomes the heading shown above the prompt. The content between the tags is the prompt text that gets copied.
+
+## Add a Cursor button
+
+Add `actions={["copy", "cursor"]}` to also surface an "Open in Cursor" button. This is especially useful for prompts that developers will use in their editor:
+
+```mdx
+<Prompt
+  description="Generate a typed API client"
+  icon="code"
+  actions={["copy", "cursor"]}
+>
+You are an expert TypeScript developer. Given the following OpenAPI
+specification, generate a fully-typed API client using native fetch. Include:
+- A base client class with configurable baseUrl and auth headers
+- One method per endpoint, with typed request parameters and response types
+- JSDoc comments on each method
+Do not use any third-party HTTP libraries.
+</Prompt>
+```
+
+## Props
+
+<ResponseField name="description" type="string" required>
+  Heading text shown above the prompt content.
+</ResponseField>
+
+<ResponseField name="children" type="string" required>
+  The prompt text that gets copied or sent to Cursor.
+</ResponseField>
+
+<ResponseField name="actions" type="array">
+  Action buttons to display. Options: `"copy"`, `"cursor"`. Defaults to `["copy"]`.
+</ResponseField>
+
+<ResponseField name="icon" type="string">
+  An icon shown alongside the description. Accepts Font Awesome, Lucide, or Tabler icon names, image URLs, or inline SVG.
+</ResponseField>
+
+## When to use it
+
+<CardGroup cols={2}>
+  <Card title="Quickstart guides" icon="rocket">
+    Give readers a prompt to generate their first integration from your API spec.
+  </Card>
+  <Card title="API reference" icon="terminal">
+    Include a prompt for generating a client library from the OpenAPI spec.
+  </Card>
+  <Card title="Troubleshooting" icon="triangle-exclamation">
+    Embed a debugging prompt readers can run against their own error logs.
+  </Card>
+  <Card title="Conceptual pages" icon="lightbulb">
+    Add a prompt for exploring the topic further with an AI assistant.
+  </Card>
+</CardGroup>

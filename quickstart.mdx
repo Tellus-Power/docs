@@ -1,0 +1,88 @@
+---
+title: "Quickstart: Publish Your First Mintlify Docs"
+description: "Set up your Mintlify docs site in three steps: clone your repo, preview locally with the CLI, and publish by pushing to your default branch."
+icon: "rocket"
+---
+
+Mintlify gives you a live documentation site from a GitHub repository. This guide walks you through cloning your docs repo, previewing it locally, and publishing your first change.
+
+## Step 1: Set up your local environment
+
+<AccordionGroup>
+  <Accordion icon="copy" title="Clone your docs repository">
+    Your docs repository was created during Mintlify onboarding. Find the link in your [dashboard](https://dashboard.mintlify.com).
+
+    Clone it to your machine using the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+  </Accordion>
+  <Accordion icon="rectangle-terminal" title="Start the preview server">
+    Install the Mintlify CLI and run it from your docs directory:
+
+    ```bash
+    npm i -g mint
+    mint dev
+    ```
+
+    Open [http://localhost:3000](http://localhost:3000) to see your docs live.
+
+    <Tip>Your preview updates automatically as you edit files — no refresh needed.</Tip>
+  </Accordion>
+</AccordionGroup>
+
+## Step 2: Make your first change
+
+<AccordionGroup>
+  <Accordion icon="palette" title="Update your site name and colors">
+    Open `docs.json` and update the `name` and `colors` fields to match your brand:
+
+    ```json docs.json
+    {
+      "name": "My Product Docs",
+      "colors": {
+        "primary": "#0066FF",
+        "light": "#66A3FF",
+        "dark": "#004ACC"
+      }
+    }
+    ```
+
+    Save the file and watch your local preview update instantly.
+  </Accordion>
+  <Accordion icon="github" title="Install the Mintlify GitHub app">
+    Install the Mintlify GitHub app from your [dashboard settings](https://dashboard.mintlify.com/settings/organization/github-app).
+
+    The GitHub app automatically deploys every push to your default branch — no manual deploy steps needed.
+  </Accordion>
+</AccordionGroup>
+
+## Step 3: Go live
+
+<AccordionGroup>
+  <Accordion icon="rocket" title="Publish your docs">
+    Commit and push your changes to your repository's default branch:
+
+    ```bash
+    git add .
+    git commit -m "Customize docs branding"
+    git push
+    ```
+
+    Your docs update within seconds of the push.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Write content" icon="pen-to-square" href="/essentials/markdown">
+    Learn MDX syntax and start writing your documentation.
+  </Card>
+  <Card title="Customize style" icon="palette" href="/essentials/settings">
+    Fine-tune your brand, navigation, and site identity.
+  </Card>
+  <Card title="Add code examples" icon="code" href="/essentials/code">
+    Include syntax-highlighted code blocks and multi-language examples.
+  </Card>
+  <Card title="API documentation" icon="terminal" href="/api-reference/introduction">
+    Auto-generate API docs from your OpenAPI specification.
+  </Card>
+</CardGroup>

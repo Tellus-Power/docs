@@ -1,0 +1,49 @@
+---
+title: "Reuse Content Across Pages with Snippets"
+description: "Create MDX snippets in the snippets/ folder and embed them on multiple pages to keep shared content consistent and easy to update in one place."
+icon: "recycle"
+---
+
+Snippets let you write a piece of MDX content once and reuse it across multiple pages. When you update a snippet, the change propagates everywhere it's used — no copying and pasting required.
+
+## Create a snippet
+
+Add an `.mdx` file to the `snippets/` folder in your repository. Snippets support all standard Markdown and Mintlify components:
+
+```mdx snippets/api-auth-note.mdx
+<Note>
+  All API requests require a Bearer token in the `Authorization` header.
+  Get your token from the [dashboard](https://dashboard.mintlify.com).
+</Note>
+```
+
+<Warning>
+  Do not use `export` statements in snippet files. Snippets are embedded content, not JavaScript modules.
+</Warning>
+
+## Use a snippet
+
+Embed a snippet on any page using the `<Snippet>` component, referencing the filename relative to the `snippets/` folder:
+
+```mdx
+<Snippet file="api-auth-note.mdx" />
+```
+
+The snippet's content renders inline at that position on the page.
+
+## Common use cases
+
+<AccordionGroup>
+  <Accordion title="Authentication notes">
+    Add a consistent auth requirement note to every API reference page without duplicating the content. Update it once in the snippet and all pages reflect the change immediately.
+  </Accordion>
+  <Accordion title="Prerequisites blocks">
+    Share a prerequisites section (Node.js version, required tools, environment setup) across multiple setup guides from a single source.
+  </Accordion>
+  <Accordion title="Beta or preview warnings">
+    Add a beta callout to feature pages from one snippet file. Remove it once the feature is generally available and all pages update at once.
+  </Accordion>
+  <Accordion title="Shared code examples">
+    Reuse a boilerplate code example across multiple pages that each describe a different aspect of the same SDK or API.
+  </Accordion>
+</AccordionGroup>

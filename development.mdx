@@ -1,0 +1,82 @@
+---
+title: "Preview and Develop Docs Locally with the CLI"
+description: "Install the Mintlify CLI to preview your docs at localhost:3000, run on a custom port, validate internal links, and troubleshoot common errors."
+icon: "terminal"
+---
+
+The Mintlify CLI (`mint`) lets you preview your documentation site locally before publishing. Changes you make to MDX files and `docs.json` are reflected instantly in your browser — no build step required.
+
+<Info>
+  **Requirements**: Node.js version 19 or higher.
+</Info>
+
+## Install the CLI
+
+Install the Mintlify CLI globally using npm:
+
+```bash
+npm i -g mint
+```
+
+## Start the preview server
+
+Run the following command from the root of your docs directory (where `docs.json` is located):
+
+```bash
+mint dev
+```
+
+Your docs preview opens at [http://localhost:3000](http://localhost:3000).
+
+## Custom ports
+
+By default, Mintlify uses port 3000. Use the `--port` flag to run on a different port:
+
+```bash
+mint dev --port 3333
+```
+
+If the port you choose is already in use, Mintlify automatically tries the next available port:
+
+```
+Port 3000 is already in use. Trying 3001 instead.
+```
+
+## Validate links
+
+Before publishing, check for broken internal links with:
+
+```bash
+mint broken-links
+```
+
+## Keep the CLI up to date
+
+Each CLI version corresponds to a specific Mintlify release. If your local preview looks different from production, update the CLI:
+
+```bash
+mint update
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title='Error: Could not load the "sharp" module'>
+    This is usually caused by an outdated Node.js version. Fix it by:
+
+    1. Removing the current CLI: `npm remove -g mint`
+    2. Upgrading to Node.js v19 or higher
+    3. Reinstalling: `npm i -g mint`
+  </Accordion>
+  <Accordion title="Encountering an unknown error">
+    Delete the Mintlify cache folder and restart the server:
+
+    ```bash
+    rm -rf ~/.mintlify
+    mint dev
+    ```
+  </Accordion>
+  <Accordion title="Page shows as 404">
+    Make sure the page path is listed in the `navigation` field of your `docs.json`. Pages not included in navigation are not shown in the sidebar but can still be reached directly or via search.
+  </Accordion>
+</AccordionGroup>

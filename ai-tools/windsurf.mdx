@@ -1,0 +1,42 @@
+---
+title: "Set Up Windsurf to Write Mintlify Documentation"
+description: "Install the Mintlify skill in Windsurf to give Cascade full component reference, writing standards, and workflow guidance for your docs."
+icon: "water"
+---
+
+Windsurf's Cascade AI assistant can help you write and maintain your Mintlify documentation. Install the Mintlify skill to give Cascade full knowledge of the component library, `docs.json` schema, and writing conventions.
+
+## Prerequisites
+
+- [Windsurf](https://codeium.com/windsurf) editor installed
+- Your docs repository open in Windsurf
+
+## Setup
+
+<Steps>
+  <Step title="Open your docs directory in Windsurf">
+    Open the root of your documentation repository — the folder containing `docs.json`.
+  </Step>
+
+  <Step title="Install the Mintlify skill">
+    In the integrated terminal, run:
+
+    ```bash
+    npx skills add https://mintlify.com/docs
+    ```
+
+    This installs Mintlify's documentation skill, giving Cascade access to component reference, writing standards, and workflow guidance.
+  </Step>
+
+  <Step title="Customize project instructions">
+    Edit `AGENTS.md` in your project root to add project-specific terminology, style preferences, and content boundaries.
+  </Step>
+
+  <Step title="Start writing with Cascade">
+    Open any `.mdx` file and use Cascade to draft, edit, and review your documentation pages.
+  </Step>
+</Steps>
+
+<Tip>
+  Keep `mint dev` running in a terminal alongside Windsurf to see your docs update live at `http://localhost:3000` as you edit.
+</Tip>

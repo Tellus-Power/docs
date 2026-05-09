@@ -1,0 +1,49 @@
+---
+title: "Set Up Claude Code for Writing Mintlify Docs"
+description: "Configure Claude Code with the Mintlify skill to get component reference, writing standards, and workflow guidance in your terminal."
+icon: "asterisk"
+---
+
+Claude Code is an agentic coding tool from Anthropic that runs in your terminal. With the Mintlify skill installed, Claude Code understands Mintlify's component library, `docs.json` configuration, and writing conventions — so it can help you write and maintain your docs accurately.
+
+## Prerequisites
+
+- An active Claude subscription (Pro, Max, or API access)
+
+## Setup
+
+<Steps>
+  <Step title="Install Claude Code">
+    ```bash
+    npm install -g @anthropic-ai/claude-code
+    ```
+  </Step>
+
+  <Step title="Open your docs directory">
+    Navigate to the root of your documentation repository — the folder containing `docs.json`.
+  </Step>
+
+  <Step title="Install the Mintlify skill">
+    ```bash
+    npx skills add https://mintlify.com/docs
+    ```
+
+    This gives Claude Code Mintlify's component reference, writing standards, and workflow guidance so it can write accurate MDX for your docs.
+  </Step>
+
+  <Step title="Customize project instructions">
+    Edit `AGENTS.md` in your project root to add product-specific terminology, style preferences, and content scope.
+  </Step>
+
+  <Step title="Start Claude Code">
+    ```bash
+    claude
+    ```
+
+    Ask Claude Code to write, edit, or review your documentation pages.
+  </Step>
+</Steps>
+
+<Tip>
+  Run `mint dev` in a separate terminal to preview your docs at `http://localhost:3000` while Claude Code makes changes.
+</Tip>

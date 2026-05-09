@@ -1,0 +1,66 @@
+---
+title: "Add Code Blocks and Examples to Your Docs"
+description: "Display syntax-highlighted code in your Mintlify docs with language tags, filename labels, and multi-language tabs using CodeGroup."
+icon: "code"
+---
+
+Mintlify renders syntax-highlighted code blocks from standard Markdown fenced code syntax. You can label blocks with a filename, group multiple languages into a tabbed view, and show copy buttons automatically.
+
+## Basic code blocks
+
+Wrap code with triple backticks and specify a language for syntax highlighting:
+
+````md
+```typescript
+const response = await fetch('https://api.example.com/users');
+const data = await response.json();
+```
+````
+
+Mintlify supports all common languages: `typescript`, `javascript`, `python`, `bash`, `json`, `yaml`, `mdx`, `sql`, and more.
+
+## Filename labels
+
+Add a filename after the language tag to display a label above the code block:
+
+````md
+```typescript app.ts
+import { createClient } from './client';
+
+const client = createClient({ apiKey: process.env.API_KEY });
+```
+````
+
+## Multi-language examples with CodeGroup
+
+Use `<CodeGroup>` to display the same example in multiple languages as tabs. Readers can switch between them without leaving the page.
+
+<CodeGroup>
+  ```typescript TypeScript
+  const response = await fetch('https://api.example.com/users', {
+    headers: { Authorization: `Bearer ${apiKey}` }
+  });
+  ```
+
+  ```python Python
+  import requests
+
+  response = requests.get(
+    'https://api.example.com/users',
+    headers={'Authorization': f'Bearer {api_key}'}
+  )
+  ```
+
+  ```bash curl
+  curl https://api.example.com/users \
+    -H "Authorization: Bearer $API_KEY"
+  ```
+</CodeGroup>
+
+<Tip>
+  Use `<CodeGroup>` for install commands to cover npm, yarn, and pnpm — readers can pick their preferred package manager.
+</Tip>
+
+## Inline code
+
+Wrap text in backticks for inline code: `` `mint dev` `` renders as `mint dev`.

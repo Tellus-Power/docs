@@ -1,0 +1,78 @@
+---
+title: "Write Docs with MDX and Markdown Syntax"
+description: "Mintlify pages support standard Markdown — bold, italic, links, blockquotes, tables, and LaTeX — plus JSX components in the same file."
+icon: "text-size"
+---
+
+Mintlify pages are written in MDX — a superset of Markdown that supports both standard Markdown syntax and JSX components. You can use all the familiar Markdown formatting you already know, with a few Mintlify-specific additions.
+
+## Headings
+
+Use `##` for section headings and `###` for subsections. Each heading automatically creates a page anchor and appears in the table of contents on the right side of the page.
+
+```md
+## Section heading
+
+### Subsection heading
+```
+
+## Text formatting
+
+Wrap text with the following characters to apply formatting:
+
+| Style         | Syntax            | Result          |
+| ------------- | ----------------- | --------------- |
+| Bold          | `**bold**`        | **bold**        |
+| Italic        | `_italic_`        | _italic_        |
+| Strikethrough | `~strikethrough~` | ~strikethrough~ |
+
+You can combine styles: `**_bold and italic_**` renders as **_bold and italic_**.
+
+For superscript and subscript, use HTML tags:
+
+| Text size   | Syntax                   | Result                 |
+| ----------- | ------------------------ | ---------------------- |
+| Superscript | `<sup>superscript</sup>` | <sup>superscript</sup> |
+| Subscript   | `<sub>subscript</sub>`   | <sub>subscript</sub>   |
+
+## Links
+
+Add a hyperlink with `[display text](url)`.
+
+```md
+[Visit the dashboard](https://dashboard.mintlify.com)
+```
+
+For links to other pages in your docs, use root-relative paths:
+
+```md
+[Authentication guide](/guides/authentication)
+```
+
+<Tip>
+  Use root-relative paths for internal links (starting with `/`). Relative links like `../page` work but are slower because Mintlify cannot optimize them.
+</Tip>
+
+## Blockquotes
+
+Add `>` before a paragraph to create a blockquote:
+
+```md
+> This is a blockquote. It renders with a left border and indented text.
+```
+
+For multiline blockquotes, prefix each line:
+
+```md
+> First line of the quote.
+>
+> Second paragraph of the quote.
+```
+
+## LaTeX
+
+Render mathematical expressions using the `<Latex>` component:
+
+```md
+<Latex>8 x (vk x H1 - H2) = (0,1)</Latex>
+```

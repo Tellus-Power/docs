@@ -1,0 +1,45 @@
+---
+title: "Set Up Cursor to Write Mintlify Documentation"
+description: "Install the Mintlify skill in Cursor to get component reference, writing standards, and workflow guidance directly inside your editor."
+icon: "arrow-pointer"
+---
+
+The Mintlify skill for Cursor gives the Cursor AI assistant full knowledge of Mintlify's component library, `docs.json` schema, and writing standards. Once installed, Cursor can help you write and edit MDX pages accurately without hallucinating component names or props.
+
+## Prerequisites
+
+- [Cursor](https://cursor.sh) editor installed
+- Your docs repository open in Cursor
+
+## Setup
+
+<Steps>
+  <Step title="Open your docs directory in Cursor">
+    Open the root of your documentation repository — the folder that contains `docs.json`.
+  </Step>
+
+  <Step title="Install the Mintlify skill">
+    In the integrated terminal, run:
+
+    ```bash
+    npx skills add https://mintlify.com/docs
+    ```
+
+    This installs Mintlify's documentation skill into your project, giving Cursor access to component reference, writing standards, and workflow guidance.
+  </Step>
+
+  <Step title="Customize project instructions">
+    Edit `AGENTS.md` in your project root to add project-specific details:
+    - Your product's terminology (e.g., "workspace" not "project")
+    - Style preferences
+    - Content scope boundaries (what should and shouldn't be documented)
+  </Step>
+
+  <Step title="Start writing">
+    Open any `.mdx` file and use Cursor's AI features to draft, edit, and refine your documentation.
+  </Step>
+</Steps>
+
+<Tip>
+  Run `mint dev` in a terminal alongside Cursor to preview your changes at `http://localhost:3000` as you write.
+</Tip>

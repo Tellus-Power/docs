@@ -1,0 +1,89 @@
+---
+title: "Plant Store API Reference"
+description: "Authenticate with the Plant Store API using Bearer tokens, then use the REST endpoints to retrieve, create, and delete plant records."
+icon: "book"
+---
+
+The Plant Store API lets you retrieve, create, and delete plant records. All requests must be authenticated with a Bearer token passed in the `Authorization` header. This reference covers authentication setup and links to each available endpoint.
+
+## Authentication
+
+Every request to the Plant Store API requires a Bearer token:
+
+```bash
+Authorization: Bearer YOUR_TOKEN
+```
+
+Pass this header with every API call. Requests without a valid token return a `400` error.
+
+## Base URL
+
+```
+http://sandbox.mintlify.com
+```
+
+## Making your first request
+
+<CodeGroup>
+
+```bash curl
+curl http://sandbox.mintlify.com/plants \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```typescript TypeScript
+const response = await fetch('http://sandbox.mintlify.com/plants', {
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+const plants = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+  'http://sandbox.mintlify.com/plants',
+  headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+plants = response.json()
+```
+
+</CodeGroup>
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="GET /plants" icon="leaf" href="/api-reference/endpoint/get">
+    List all plants you have access to.
+  </Card>
+  <Card title="POST /plants" icon="plus" href="/api-reference/endpoint/create">
+    Add a new plant to the store.
+  </Card>
+  <Card title="DELETE /plants/{id}" icon="trash" href="/api-reference/endpoint/delete">
+    Remove a plant by ID.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/api-reference/endpoint/webhook">
+    Receive notifications when plants are added.
+  </Card>
+</CardGroup>
+
+## Error responses
+
+All errors return a JSON body:
+
+```json
+{
+  "error": 400,
+  "message": "Unexpected error occurred"
+}
+```
+
+<ResponseField name="error" type="integer">
+  The HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A human-readable error description.
+</ResponseField>

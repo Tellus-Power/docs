@@ -1,0 +1,91 @@
+---
+title: "Configure the Contextual Toolbar for AI Access"
+description: "Add a floating toolbar to every docs page so readers can copy content, open it in Claude or ChatGPT, and connect your docs as an MCP server."
+icon: "bolt"
+---
+
+The contextual toolbar is a floating action bar that appears on every page of your docs site. It lets readers copy page content as Markdown, open it in their preferred AI assistant, add it to their code editor, or connect your entire docs site as an MCP server — all without leaving the page.
+
+Configure the toolbar in `docs.json` under `contextual.options`:
+
+```json docs.json
+{
+  "contextual": {
+    "options": ["copy", "view", "claude", "chatgpt", "mcp", "cursor", "vscode"]
+  }
+}
+```
+
+<Note>
+  The contextual toolbar only appears in preview and production deployments. It is not visible when running `mint dev` locally.
+</Note>
+
+## Available options
+
+### Content actions
+
+| Option | Description |
+|--------|-------------|
+| `copy` | Copies the page as Markdown to the clipboard |
+| `view` | Opens the raw Markdown version of the page (`.md` URL) |
+
+### AI assistants
+
+| Option | Description |
+|--------|-------------|
+| `claude` | Opens the page in Claude |
+| `chatgpt` | Opens the page in ChatGPT |
+| `perplexity` | Opens the page in Perplexity |
+| `grok` | Opens the page in Grok |
+| `aistudio` | Opens the page in Google AI Studio |
+
+### Editor integrations
+
+| Option | Description |
+|--------|-------------|
+| `cursor` | Adds the page to Cursor's context |
+| `vscode` | Adds the page to VS Code Copilot |
+| `windsurf` | Adds the page to Windsurf's Cascade |
+| `devin` | Opens the page in Devin |
+
+### MCP
+
+| Option | Description |
+|--------|-------------|
+| `mcp` | Shows instructions for using your docs as an MCP server |
+| `add-mcp` | Provides a one-click prompt to add your docs MCP server to an AI tool |
+
+<Tip>
+  The `mcp` and `add-mcp` options let developers connect your entire docs site to any MCP-compatible AI assistant, so it can answer questions about your product directly.
+</Tip>
+
+## Custom options
+
+Add custom entries to the toolbar with a title, description, icon, and link. The `href` field supports dynamic placeholders:
+
+| Placeholder | Resolves to |
+|-------------|-------------|
+| `$page` | The current page's full URL |
+| `$path` | The current page's path |
+| `$mcp` | Your docs MCP server URL |
+
+```json docs.json
+{
+  "contextual": {
+    "options": [
+      "copy",
+      "claude",
+      {
+        "title": "Open issue",
+        "description": "Report a problem with this page",
+        "icon": "github",
+        "href": "https://github.com/your-org/docs/issues/new?title=Issue+on+$path"
+      }
+    ]
+  }
+}
+```
+
+## Pairing with Visibility
+
+The `copy` and `view` options expose the raw Markdown version of your page. If you use the [`Visibility`](/agent-ready/visibility) component, content marked `for="agents"` is included in that Markdown — giving AI assistants structured context that human readers don't see.

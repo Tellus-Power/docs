@@ -1,0 +1,92 @@
+---
+title: "GET /plants — List All Plants"
+description: "Retrieve all plant records you have access to. Pass an optional limit query parameter to cap the number of results returned by the API."
+icon: "leaf"
+---
+
+The `GET /plants` endpoint returns an array of plant objects from the store. Use the `limit` parameter to control how many results are returned at once.
+
+## Request
+
+```bash
+GET /plants
+```
+
+### Query parameters
+
+<ParamField query="limit" type="integer">
+  The maximum number of results to return. Omit to return all plants.
+</ParamField>
+
+### Example request
+
+<CodeGroup>
+
+```bash curl
+curl "http://sandbox.mintlify.com/plants?limit=10" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```typescript TypeScript
+const response = await fetch('http://sandbox.mintlify.com/plants?limit=10', {
+  headers: { 'Authorization': 'Bearer YOUR_TOKEN' }
+});
+const plants = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+  'http://sandbox.mintlify.com/plants',
+  params={'limit': 10},
+  headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+plants = response.json()
+```
+
+</CodeGroup>
+
+## Response
+
+Returns an array of Plant objects on success.
+
+### 200 — Success
+
+```json
+[
+  {
+    "name": "Monstera deliciosa",
+    "tag": "tropical"
+  },
+  {
+    "name": "Aloe vera",
+    "tag": "succulent"
+  }
+]
+```
+
+<ResponseField name="name" type="string" required>
+  The name of the plant.
+</ResponseField>
+
+<ResponseField name="tag" type="string">
+  A tag describing the plant type or category.
+</ResponseField>
+
+### 400 — Error
+
+```json
+{
+  "error": 400,
+  "message": "Unexpected error"
+}
+```
+
+<ResponseField name="error" type="integer">
+  The HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A human-readable description of what went wrong.
+</ResponseField>

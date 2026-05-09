@@ -1,0 +1,51 @@
+---
+title: "Add Images and Media to Your Docs Pages"
+description: "Display images in your Mintlify docs using Markdown syntax or the Frame component for styled borders. Supports local paths and external URLs."
+icon: "image"
+---
+
+Mintlify supports standard Markdown image syntax as well as a `<Frame>` component for styled image display. Store images in your repository or reference external URLs.
+
+## Basic images
+
+Use standard Markdown syntax to embed an image:
+
+```md
+![Alt text describing the image](/images/screenshot.png)
+```
+
+Mintlify supports PNG, JPEG, SVG, and GIF formats. Store your images in a folder (e.g., `/images/`) in your repository and reference them with root-relative paths.
+
+## Framed images
+
+Wrap an image in `<Frame>` to add a styled border and rounded corners — useful for screenshots and UI walkthroughs:
+
+```mdx
+<Frame>
+  <img src="/images/dashboard.png" alt="Screenshot of the Mintlify dashboard" />
+</Frame>
+```
+
+## External images
+
+You can reference external image URLs directly:
+
+```mdx
+<Frame>
+  <img src="https://example.com/diagram.png" alt="Architecture diagram" />
+</Frame>
+```
+
+<Tip>
+  Always include descriptive `alt` text on every image for accessibility and SEO.
+</Tip>
+
+## Image sizing
+
+Images render at their natural size, constrained to the content column width. You can specify width using HTML attributes on the `<img>` tag:
+
+```mdx
+<Frame>
+  <img src="/images/logo.png" alt="Logo" width="200" />
+</Frame>
+```

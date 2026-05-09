@@ -1,0 +1,100 @@
+{
+  "projectType": "saas",
+  "projectName": "Mintlify",
+  "projectDescription": "A documentation platform that lets teams build and publish beautiful, developer-friendly docs sites from MDX files with one-click deployment.",
+  "theme": "luma",
+  "primaryColor": "#ef7025",
+  "lightColor": "#eec9bc",
+  "darkColor": "#4fa1ab",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "quickstart",
+              "development"
+            ]
+          },
+          {
+            "group": "Customize",
+            "pages": [
+              "essentials/settings",
+              "essentials/navigation"
+            ]
+          },
+          {
+            "group": "Write Content",
+            "pages": [
+              "essentials/markdown",
+              "essentials/code",
+              "essentials/images",
+              "essentials/components",
+              "essentials/reusable-snippets"
+            ]
+          },
+          {
+            "group": "AI & Agents",
+            "pages": [
+              "agent-ready/prompt",
+              "agent-ready/visibility",
+              "agent-ready/contextual",
+              "ai-tools/cursor",
+              "ai-tools/claude-code",
+              "ai-tools/windsurf"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/endpoint/get",
+              "api-reference/endpoint/create",
+              "api-reference/endpoint/delete",
+              "api-reference/endpoint/webhook"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "MDX-based documentation pages with rich components",
+    "Git-based workflow with automatic deployment via GitHub app",
+    "Local preview with Mintlify CLI (mint dev)",
+    "Built-in AI-ready features: Prompt component, Visibility toggling, contextual toolbar",
+    "OpenAPI auto-generated API reference documentation",
+    "Customizable themes, colors, navigation, and branding via docs.json",
+    "One-click AI tool integrations: Cursor, Claude Code, Windsurf, ChatGPT, Perplexity",
+    "MCP server support for connecting docs to AI assistants",
+    "Reusable content snippets",
+    "Syntax-highlighted code blocks with multi-language CodeGroup"
+  ],
+  "publicApiSurface": [
+    "GET /plants — list all plants",
+    "POST /plants — create a plant",
+    "DELETE /plants/{id} — delete a plant",
+    "POST /plant/webhook — plant added webhook",
+    "docs.json configuration schema",
+    "mint dev — local preview CLI command",
+    "mint broken-links — validate links CLI command",
+    "mint update — update CLI command",
+    "<Prompt> MDX component",
+    "<Visibility for='humans|agents'> MDX component",
+    "contextual.options configuration",
+    "npx skills add — AI skill installer"
+  ]
+}

@@ -1,0 +1,124 @@
+---
+title: "Mintlify MDX Components: Cards, Steps, Tabs & More"
+description: "Use Mintlify's built-in MDX components to build rich documentation pages with callouts, cards, steps, tabs, accordions, and code groups."
+icon: "puzzle-piece"
+---
+
+Mintlify provides a set of MDX components that let you build rich, interactive documentation pages without writing HTML. Import nothing — every component is available in all your `.mdx` files automatically.
+
+## Callouts
+
+Use callouts to draw attention to important information. Four variants are available:
+
+<Note>A **Note** provides general information or context.</Note>
+
+<Tip>A **Tip** highlights a helpful shortcut or best practice.</Tip>
+
+<Warning>A **Warning** flags something that could cause problems or data loss.</Warning>
+
+<Info>An **Info** callout provides supplementary context.</Info>
+
+Use these in your MDX files like this:
+
+```mdx
+<Note>A **Note** provides general information or context.</Note>
+<Tip>A **Tip** highlights a helpful shortcut or best practice.</Tip>
+<Warning>A **Warning** flags something that could cause problems.</Warning>
+<Info>An **Info** callout provides supplementary context.</Info>
+```
+
+## Cards
+
+Cards link readers to other pages or highlight key resources. Use `<CardGroup cols={N}>` to arrange them in a grid:
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="terminal" href="/api-reference/introduction">
+    Auto-generated docs from your OpenAPI spec.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your docs running in three steps.
+  </Card>
+</CardGroup>
+
+Use `cols` values of 2, 3, or 4 to control grid width. Cards without `href` render as informational panels.
+
+## Steps
+
+Present numbered procedures clearly with `<Steps>` and `<Step>`:
+
+<Steps>
+  <Step title="Install the package">
+    ```bash
+    npm install my-package
+    ```
+  </Step>
+  <Step title="Initialize">
+    Run the init command in your project root.
+  </Step>
+  <Step title="You're ready">
+    Start using the package in your code.
+  </Step>
+</Steps>
+
+## Tabs
+
+Tabs let readers switch between alternative content — different languages, environments, or platforms:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install my-package
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add my-package
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm add my-package
+    ```
+  </Tab>
+</Tabs>
+
+## Accordions
+
+Accordions collapse content behind a toggle — great for FAQs or optional detail:
+
+<AccordionGroup>
+  <Accordion title="When should I use tabs vs. accordions?">
+    Use **tabs** when readers need to switch between mutually exclusive alternatives (e.g., different programming languages). Use **accordions** for optional detail readers can skip — FAQs, troubleshooting steps, or advanced configuration.
+  </Accordion>
+  <Accordion title="Can I nest components inside each other?">
+    Yes. Most Mintlify components can be nested. For example, you can put a `<Steps>` block inside a `<Tab>`, or a code block inside an `<Accordion>`.
+  </Accordion>
+</AccordionGroup>
+
+## Code groups
+
+`<CodeGroup>` displays multiple code snippets as tabs — ideal for multi-language examples:
+
+<CodeGroup>
+  ```typescript TypeScript
+  const response = await fetch('https://api.example.com/users');
+  ```
+
+  ```python Python
+  response = requests.get('https://api.example.com/users')
+  ```
+
+  ```bash curl
+  curl https://api.example.com/users
+  ```
+</CodeGroup>
+
+## Frames
+
+Wrap images in `<Frame>` to add a styled border and rounded corners:
+
+```mdx
+<Frame>
+  <img src="/images/screenshot.png" alt="App screenshot" />
+</Frame>
+```

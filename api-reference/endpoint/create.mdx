@@ -1,0 +1,106 @@
+---
+title: "POST /plants — Add a New Plant"
+description: "Create a new plant record in the store. Send a JSON body with a required name and optional tag. Returns the plant object with its assigned ID."
+icon: "plus"
+---
+
+The `POST /plants` endpoint creates a new plant in the store. Send a JSON body with the plant's name and an optional tag. The response includes the created plant with its assigned ID.
+
+## Request
+
+```bash
+POST /plants
+Content-Type: application/json
+```
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  The name of the plant.
+</ParamField>
+
+<ParamField body="tag" type="string">
+  A tag describing the plant type or category (e.g., `"tropical"`, `"succulent"`).
+</ParamField>
+
+### Example request
+
+<CodeGroup>
+
+```bash curl
+curl -X POST http://sandbox.mintlify.com/plants \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Monstera deliciosa", "tag": "tropical"}'
+```
+
+```typescript TypeScript
+const response = await fetch('http://sandbox.mintlify.com/plants', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'Monstera deliciosa',
+    tag: 'tropical'
+  })
+});
+const plant = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+  'http://sandbox.mintlify.com/plants',
+  headers={'Authorization': 'Bearer YOUR_TOKEN'},
+  json={'name': 'Monstera deliciosa', 'tag': 'tropical'}
+)
+plant = response.json()
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Success
+
+Returns the created plant object including its assigned ID.
+
+```json
+{
+  "id": 42,
+  "name": "Monstera deliciosa",
+  "tag": "tropical"
+}
+```
+
+<ResponseField name="id" type="integer">
+  The unique identifier assigned to the new plant.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the plant as provided.
+</ResponseField>
+
+<ResponseField name="tag" type="string">
+  The tag as provided, if any.
+</ResponseField>
+
+### 400 — Error
+
+```json
+{
+  "error": 400,
+  "message": "Unexpected error"
+}
+```
+
+<ResponseField name="error" type="integer">
+  The HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A human-readable description of what went wrong.
+</ResponseField>

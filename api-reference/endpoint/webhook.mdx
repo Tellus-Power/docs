@@ -1,0 +1,73 @@
+---
+title: "Plant Store Webhooks"
+description: "Receive a POST request to your endpoint whenever a new plant is added to the store. Includes payload schema, handler examples, and retry behavior."
+icon: "webhook"
+---
+
+The Plant Store API sends a webhook event to your configured endpoint whenever a new plant is added to the store. Use webhooks to trigger workflows, sync data, or notify your team in real time — without polling the API.
+
+## Webhook event
+
+When a new plant is created, the API sends a `POST` request to your webhook URL with the new plant's data in the request body.
+
+### Event payload
+
+```json
+{
+  "id": 42,
+  "name": "Monstera deliciosa",
+  "tag": "tropical"
+}
+```
+
+<ResponseField name="id" type="integer">
+  The unique ID of the newly created plant.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the plant.
+</ResponseField>
+
+<ResponseField name="tag" type="string">
+  The plant's tag, if one was provided at creation.
+</ResponseField>
+
+## Responding to webhooks
+
+Your endpoint must return a `200` status code to acknowledge successful receipt. Any other response is treated as a failure.
+
+<CodeGroup>
+
+```typescript TypeScript (Express)
+app.post('/webhook', (req, res) => {
+  const plant = req.body;
+  console.log('New plant added:', plant.name);
+  // Handle the event...
+  res.status(200).send('OK');
+});
+```
+
+```python Python (Flask)
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.route('/webhook', methods=['POST'])
+def handle_webhook():
+  plant = request.json
+  print(f"New plant added: {plant['name']}")
+  # Handle the event...
+  return 'OK', 200
+```
+
+</CodeGroup>
+
+## Webhook security
+
+<Note>
+  Validate incoming webhook payloads to ensure they originate from the Plant Store API. Check the request signature or restrict your endpoint to the API's IP range.
+</Note>
+
+## Retries
+
+If your endpoint does not return `200`, the Plant Store API will retry the webhook delivery. Ensure your handler is idempotent — it should safely process the same event more than once without causing duplicate side effects.

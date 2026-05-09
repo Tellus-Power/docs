@@ -1,0 +1,80 @@
+---
+title: "DELETE /plants/{id} — Remove a Plant"
+description: "Permanently delete a plant from the store using its numeric ID. Returns 204 No Content on success. Deletions are immediate and cannot be undone."
+icon: "trash"
+---
+
+The `DELETE /plants/{id}` endpoint permanently removes a plant from the store. Pass the plant's numeric ID as a path parameter. A successful deletion returns `204 No Content` with no response body.
+
+## Request
+
+```bash
+DELETE /plants/{id}
+```
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  The unique ID of the plant to delete.
+</ParamField>
+
+### Example request
+
+<CodeGroup>
+
+```bash curl
+curl -X DELETE http://sandbox.mintlify.com/plants/42 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```typescript TypeScript
+const response = await fetch('http://sandbox.mintlify.com/plants/42', {
+  method: 'DELETE',
+  headers: { 'Authorization': 'Bearer YOUR_TOKEN' }
+});
+
+if (response.status === 204) {
+  console.log('Plant deleted successfully');
+}
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+  'http://sandbox.mintlify.com/plants/42',
+  headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+
+if response.status_code == 204:
+  print('Plant deleted successfully')
+```
+
+</CodeGroup>
+
+## Response
+
+### 204 — Success
+
+The plant was deleted. No response body is returned.
+
+<Warning>
+  Deletion is permanent. There is no way to recover a deleted plant.
+</Warning>
+
+### 400 — Error
+
+```json
+{
+  "error": 400,
+  "message": "Unexpected error"
+}
+```
+
+<ResponseField name="error" type="integer">
+  The HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A human-readable description of what went wrong.
+</ResponseField>
