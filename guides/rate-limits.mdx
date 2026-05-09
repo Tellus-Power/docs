@@ -1,0 +1,78 @@
+---
+title: "Rate Limits"
+description: "Request quotas for operator and charger endpoints, and how to design your client to stay within them."
+---
+
+The Tellus Open Platform API enforces per-client rate limits to ensure fair use across all integrators and to protect the underlying charging infrastructure from request floods.
+
+## Operator-side limits
+
+| Endpoint class | Limit |
+|---|---|
+| Queries (`GET /sites`, `GET /devices/*`, `GET /charging-records`, `GET /aggregated/energy`, etc.) | 60 requests / minute |
+| Batch control (`POST /control/flexibility`, batch-style operations) | 30 requests / minute |
+| Token issuance (`POST /oauth/token`) | 10 requests / minute |
+| WebSocket telemetry stream (`/v1/operator/stream`) | 1 concurrent connection per `client_id` per device subscription set |
+
+Limits apply per `client_id`, not per IP. If you operate multiple clients, each gets its own quota.
+
+## Charger-side limits
+
+| Endpoint class | Limit |
+|---|---|
+| High-frequency endpoints (heartbeat, telemetry) | 10 requests / second per device |
+| Expected cadence | Telemetry every 5 seconds; heartbeat every 30 seconds |
+| Other charger endpoints (events, charging records, command status) | 60 requests / minute per device |
+
+The 10 req/s charger-side limit is intentionally generous — normal operation runs well below it.
+
+## Exceeding the limit
+
+When a client exceeds its rate limit, the API returns:
+
+- HTTP **429 Too Many Requests**
+- Application code **5001**
+- Body: `{ "code": 5001, "message": "Too many requests", "details": { "retry_after_seconds": <int> } }`
+
+The `retry_after_seconds` field (where present) tells your client how long to wait before retrying.
+
+## Client design recommendations
+
+### Use the WebSocket stream for realtime data
+
+The single biggest cause of accidental rate-limit breach is polling `GET /devices/{id}` repeatedly to track live state. Don't do that — subscribe to the WebSocket telemetry stream (`/v1/operator/stream`) instead. One WebSocket connection replaces hundreds of REST polls.
+
+### Cache aggressively at your BFF
+
+Site lists, device metadata, firmware versions, and other slow-moving data can be cached for minutes or even hours. Only telemetry-flavoured data needs to be real-time.
+
+### Batch where possible
+
+Use pagination (`page`, `size`) and time-range filters on `/charging-records` to fetch large datasets in fewer requests. The `size` cap is 100 per page; aim for full pages.
+
+### Implement exponential backoff
+
+When you hit a 429, don't immediately retry — back off exponentially with jitter. A typical pattern:
+
+```typescript
+async function backoffOn429(fn: () => Promise<Response>, maxAttempts = 6) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const res = await fn();
+    if (res.status !== 429) return res;
+
+    const body = await res.json().catch(() => null);
+    const retryAfter = body?.details?.retry_after_seconds ?? Math.min(2 ** i, 30);
+    const jitter = Math.random() * 0.3 * retryAfter * 1000;
+    await new Promise(r => setTimeout(r, retryAfter * 1000 + jitter));
+  }
+  throw new Error('Rate limit exceeded — too many retry attempts');
+}
+```
+
+### Monitor your usage
+
+Track request counts and 429 response rates in your application metrics. A sustained non-zero 429 rate indicates your client design needs adjustment — consider where polling can be replaced with the WebSocket stream, or where caching can reduce request volume.
+
+## Need higher limits?
+
+If your integration genuinely requires higher quotas — large fleet, frequent batch control, etc. — contact [support@telluspowergroup.com](mailto:support@telluspowergroup.com) with your use case. Limits are negotiable for substantiated needs.
