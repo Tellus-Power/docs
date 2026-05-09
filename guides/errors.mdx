@@ -1,0 +1,92 @@
+---
+title: "Errors"
+description: "Error envelope, complete error code table, and recommended retry strategies."
+---
+
+Every Tellus Open Platform API response — successful or not — follows a consistent envelope. Errors include a numeric `code`, a human-readable `message`, and (optionally) a `details` block with diagnostic context.
+
+## Error envelope
+
+```json
+{
+  "code": 1001,
+  "message": "Parameter 'power' must be positive",
+  "details": {
+    "field": "power",
+    "value": -5
+  }
+}
+```
+
+The `code` is the canonical machine-readable identifier. Use it for branching logic; never parse `message` strings — message text may change without notice.
+
+## Error code reference
+
+| Code | HTTP | Description | Recommended action |
+|---|---|---|---|
+| 0 | 200 | Success | — |
+| 1001 | 400 | Invalid request parameters | Check parameter format and ranges |
+| 1002 | 400 | Missing required parameter | Inspect `details.field`, supply the missing value |
+| 2001 | 401 | Unauthenticated or invalid token | Obtain a valid token via `/v1/operator/oauth/token` |
+| 2002 | 401 | Token expired | Refresh the token and retry the request |
+| 2003 | 403 | Permission denied | Verify the `client_id` has the required scope (`read` or `write`) |
+| 3001 | 404 | Resource not found | Check the resource ID — it may have been deleted or be owned by a different operator |
+| 4001 | 409 | Resource conflict | E.g., a device with that `sn` is already registered |
+| 5001 | 429 | Too many requests | Apply backoff (see Rate Limits guide) |
+| 9001 | 500 | Internal server error | Retry with backoff; if persistent, contact support |
+
+## Retry strategy
+
+For transient errors, an exponential-backoff retry with jitter is recommended:
+
+```typescript
+async function callWithRetry(fn: () => Promise<Response>, maxAttempts = 5) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fn();
+    if (res.ok) return res;
+
+    const body = await res.json().catch(() => null);
+    const code = body?.code;
+
+    // Token expired — refresh and retry once
+    if (code === 2002 && attempt === 0) {
+      await refreshToken();
+      continue;
+    }
+
+    // Rate-limited or transient server error — backoff and retry
+    if (code === 5001 || code === 9001) {
+      const delay = Math.min(1000 * 2 ** attempt, 30_000);
+      const jitter = Math.random() * 0.3 * delay;
+      await new Promise(r => setTimeout(r, delay + jitter));
+      continue;
+    }
+
+    // Anything else is a permanent error — surface to caller
+    throw new ApiError(code, body?.message);
+  }
+  throw new Error('Max retry attempts exceeded');
+}
+```
+
+## Errors not to retry
+
+The following codes indicate **permanent** problems with the request itself; retrying them will produce the same result. Surface them to the caller for inspection rather than retrying:
+
+- `1001` invalid parameters
+- `1002` missing parameter
+- `2001` invalid token (after one refresh attempt)
+- `2003` permission denied
+- `3001` resource not found
+- `4001` conflict
+
+## Reporting issues
+
+If you encounter persistent `9001` errors or unexpected behaviour, please report them to [support@telluspowergroup.com](mailto:support@telluspowergroup.com). Include:
+
+- The full request URL, method, and request body (with secrets redacted)
+- The full response including all headers
+- A timestamp range during which the issue occurred
+- Your `client_id` (not your `client_secret`)
+
+The Tellus platform team typically responds within one business day.
