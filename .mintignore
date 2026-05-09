@@ -5,3 +5,7 @@
 # Draft content
 drafts/
 *.draft.mdx
+essentials/
+agent-ready/
+ai-tools/
+snippets/
