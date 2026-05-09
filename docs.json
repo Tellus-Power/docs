@@ -28,6 +28,14 @@
             ]
           },
           {
+            "group": "Diagnostics",
+            "pages": [
+              "diagnostics/fault-dictionary",
+              "diagnostics/runbooks",
+              "diagnostics/proposed-extensions"
+            ]
+          },
+          {
             "group": "API basics",
             "pages": [
               "guides/errors",
