@@ -1,57 +1,54 @@
 ---
-title: "Mintlify: Beautiful Docs Your Users Will Love"
-description: "Mintlify turns MDX files into a polished docs site. Connect your GitHub repo, customize your brand, and deploy in seconds — no servers required."
+title: "Tellus Power Open Platform"
+description: "Build on the open API behind Tellus Power's global charging infrastructure — OCPP-aligned, V2G-ready, partner-grade."
 ---
 
-Mintlify is a documentation platform that turns MDX files into polished, production-ready docs sites. Connect your GitHub repo, customize your brand, and your docs are live — no servers to manage, no build pipeline to configure. Everything from navigation to AI integrations is configured through a single `docs.json` file.
+The Tellus Open Platform API lets CPMS providers, EMS partners, aggregators, and Tellus's own diagnostic tooling integrate with every Tellus charger in the field — from AC wallboxes to 360 kW DC ultra-fast units to V2G-capable bidirectional chargers.
+
+> *"The future doesn't run on optimism. It runs on Electrons."*
+
+## Quick links
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="rocket" href="/quickstart">
-    Get your docs site live in three steps — local preview, GitHub connection, and first publish.
+    Authenticate and make your first request in under five minutes.
   </Card>
-  <Card title="Configuration" icon="gear" href="/essentials/settings">
-    Customize your site name, colors, logo, navbar, and footer in `docs.json`.
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Every endpoint, request shape, and response — with an interactive "Try it" console.
   </Card>
-  <Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-    Write in MDX with full Markdown support plus interactive Mintlify components.
+  <Card title="Tellus Console" icon="gauge" href="https://console.telluspowergroup.com">
+    Fleet operations and hardware diagnostics — built on this same API.
   </Card>
-  <Card title="API Reference" icon="terminal" href="/api-reference/introduction">
-    Auto-generate API docs from your OpenAPI specification with an interactive playground.
+  <Card title="Get Support" icon="envelope" href="mailto:support@telluspowergroup.com">
+    Email the Tellus platform team — we're happy to help with partner integrations.
+  </Card>
+</CardGroup>
+
+## What you can build
+
+<CardGroup cols={3}>
+  <Card title="Operator integrations" icon="building">
+    CPMS / EMS / Aggregator clients querying sites, devices, charging records, and aggregated energy in real time.
+  </Card>
+  <Card title="Realtime telemetry" icon="tower-broadcast">
+    Subscribe to per-connector telemetry over WebSocket — sub-second updates on power, energy, and SOC.
+  </Card>
+  <Card title="V2G and grid services" icon="bolt">
+    Bidirectional discharge, scheduled charging, and site-wide load-flexibility commands.
   </Card>
 </CardGroup>
 
-## Get started in minutes
+## Coexists with your existing CPMS
 
-<Steps>
-  <Step title="Clone your docs repo">
-    Create a docs repo from the Mintlify starter kit or connect an existing repository through your [dashboard](https://dashboard.mintlify.com).
-  </Step>
-  <Step title="Preview locally">
-    Install the CLI and run `mint dev` to see live changes as you write.
+Tellus chargers ship with multiple protocols enabled, so you can choose the integration shape that fits your platform:
 
-    ```bash
-    npm i -g mint
-    mint dev
-    ```
-  </Step>
-  <Step title="Deploy automatically">
-    Install the Mintlify GitHub app from your dashboard. Every push to your default branch deploys your docs instantly — no CI/CD setup required.
-  </Step>
-</Steps>
+- **OCPP 1.6-J** and **OCPP 2.0.1** for standards-based CPMS connections
+- **The Open Platform API** (this documentation) for first-party Tellus integration
+- **ISO 15118-2** and **ISO 15118-20** for Plug & Charge and bidirectional power flow
+- **V2G extensions** including Stellantis / Free2move DrossOne integration patterns
 
-## Explore by topic
+Firmware version 260420.0107 and later supports **simultaneous OCPP and Open Platform API connections to separate backends** — so your operational CPMS stays live while complementary Tellus-side services consume the same fleet over the Open Platform API.
 
-<CardGroup cols={2}>
-  <Card title="Navigation" icon="map" href="/essentials/navigation">
-    Organize pages into tabs and groups using the `docs.json` navigation schema.
-  </Card>
-  <Card title="Components" icon="puzzle-piece" href="/essentials/components">
-    Callouts, cards, steps, tabs, accordions, and more — all built in.
-  </Card>
-  <Card title="AI & Agents" icon="robot" href="/agent-ready/prompt">
-    Make your docs work for humans and AI agents alike with the Prompt and Visibility components.
-  </Card>
-  <Card title="AI Coding Tools" icon="wand-magic-sparkles" href="/ai-tools/claude-code">
-    Set up Claude Code, Cursor, or Windsurf to help you write and maintain docs.
-  </Card>
-</CardGroup>
+## Looking for the Tellus Console?
+
+The [Tellus Console](https://console.telluspowergroup.com) is built on this API. It runs in two modes — a **Fleet Console** for operational management and a **Diagnostics Console** for hardware health, faults, and component-level telemetry. If you're a partner evaluating what's possible on top of Tellus chargers, it's the fastest way to see the API rendered as a working product.
