@@ -1,0 +1,475 @@
+---
+title: "Fault dictionary"
+description: "Reference for fault codes raised by Tellus chargers — symptoms, likely causes, diagnostic steps, related telemetry, and firmware-specific known issues."
+---
+
+<Note>
+Curated by the Tellus tech team. Codes and content evolve as new firmware revisions and field experience surface new patterns. Last revised alongside firmware 260420.0107.
+</Note>
+
+This page documents the most commonly observed fault codes raised by Tellus chargers via the Open Platform API events stream. Each entry covers symptoms, likely causes, recommended diagnostic steps, the telemetry fields most useful for triage, and any firmware-version-specific issues that affect the code's interpretation.
+
+For programmatic access, fault codes appear in event payloads as `data.fault_code` on `event_type: "fault"` events (see the API Reference under `Charger — Reporting / Event Reporting`).
+
+## Index
+
+| Code | Title | Severity | Category |
+|---|---|---|---|
+| [F-0101](#f-0101---contactor-weld-detected) | Contactor weld detected | Error | Hardware |
+| [F-0203](#f-0203---connector-over-temperature) | Connector over-temperature | Warning | Thermal |
+| [F-0204](#f-0204---cabinet-over-temperature) | Cabinet over-temperature | Error | Thermal |
+| [F-0301](#f-0301---heartbeat-lost) | Heartbeat lost | Error | Connectivity |
+| [F-0302](#f-0302---reconnect-storm) | Reconnect storm | Warning | Connectivity |
+| [F-0411](#f-0411---power-module-communication-timeout) | Power module communication timeout | Error | Communication |
+| [F-0421](#f-0421---contactor-failed-to-engage-on-session-start) | Contactor failed to engage on session start | Error | Hardware |
+| [F-0512](#f-0512---configuration-profile-mismatch) | Configuration profile mismatch | Warning | Configuration |
+| [F-0601](#f-0601---cooling-fan-below-nominal-rpm) | Cooling fan below nominal RPM | Warning | Thermal |
+| [F-0701](#f-0701---v2g-inverter-sync-lost) | V2G inverter sync lost | Error | V2G |
+| [F-0702](#f-0702---ev-battery-management-refused-discharge) | EV battery management refused discharge | Warning | V2G |
+| [F-0805](#f-0805---session-terminated-unexpectedly) | Session terminated unexpectedly | Warning | Charging process |
+
+## Hardware
+
+### F-0101 — Contactor weld detected
+
+<Tip>**Severity:** Error · **Category:** Hardware</Tip>
+
+The charger has detected that a power contactor is in a stuck-closed (welded) state, typically observed when the contactor fails to release after a session ends.
+
+**Symptoms**
+
+- Connector reports continued energisation after the session has ended
+- Audible click on session start without subsequent current draw
+- Subsequent sessions on the affected connector fail to initiate
+
+**Likely causes**
+
+- Contact welding from repeated high-current cycling near the contactor's rated cycle life
+- Mechanical wear in an aged contactor approaching end-of-life
+- Inrush current event that exceeded contactor specifications
+
+**Diagnostic steps**
+
+1. Check contactor cycle counter against the model's service-life threshold (typically 60,000 cycles for AC contactors, 100,000 for DC).
+2. Run an isolation test (`>1 MΩ` is a pass).
+3. Open the cabinet under safe conditions and inspect the contactor housing for visible arcing or charring.
+4. If welding is confirmed, replace the contactor. Reset the cycle counter only after physical replacement.
+
+**Related telemetry**
+
+- `voltage` and `current` on the affected connector after session end (should both be ~0)
+- `event_type: "plug_out"` events not followed by `state: "idle"` transition
+
+**Known firmware issues**
+
+- None at firmware 260420.0107 or later.
+
+### F-0421 — Contactor failed to engage on session start
+
+<Tip>**Severity:** Error · **Category:** Hardware</Tip>
+
+The charger commanded the main power contactor to close at the start of a charging session, but did not detect the expected contactor-closed feedback signal within the timeout window.
+
+**Symptoms**
+
+- Session reaches `state: "preparing"` and then transitions directly to `state: "fault"`
+- No current flow on the connector despite a successful plug-in event
+- Repeat occurrences clustered on the same charger or across chargers running the same firmware version
+
+**Likely causes**
+
+- Mechanical contactor failure (contactor stuck open)
+- Driver coil under-voltage from an aged or failing power supply
+- Auxiliary feedback contact dirty or oxidised
+- Firmware regression in 3.0.x affecting timing of feedback-window expectation (resolved in 3.1.0)
+
+**Diagnostic steps**
+
+1. Cross-reference fault frequency by firmware version — if concentrated on 3.0.x, plan a firmware upgrade campaign before pursuing hardware replacement.
+2. Measure contactor coil supply voltage during a commanded close (should be at rated voltage ±5%).
+3. Check the auxiliary feedback contact resistance with a multimeter.
+4. Listen for the audible click during a commanded session start — present-but-no-feedback suggests an aux-contact issue; absent click suggests coil or driver problem.
+5. If the issue is firmware-related, schedule rollout of the latest stable build for the affected models.
+
+**Related telemetry**
+
+- Event sequence: `plug_in` → `state: "preparing"` → no transition to `state: "charging"`
+- Multiple occurrences across distinct devices on the same firmware = strong signal of firmware regression
+
+**Known firmware issues**
+
+- Affects firmware 3.0.0–3.0.2; resolved in 3.0.3 and all 3.1.x builds. If you observe a cluster of F-0421 across multiple chargers, check the firmware-version distribution first.
+
+## Thermal
+
+### F-0203 — Connector over-temperature
+
+<Tip>**Severity:** Warning · **Category:** Thermal</Tip>
+
+The connector temperature has exceeded the warning threshold (typically 65 °C for AC, 75 °C for DC). Power is throttled but the session continues.
+
+**Symptoms**
+
+- Power throttled below the connector's rated value
+- Thermal warning LED flashing on the affected connector
+- `temperature` field in telemetry above warning threshold
+
+**Likely causes**
+
+- Ambient temperature above 35 °C combined with poor airflow around the cable
+- Connector pin oxidation increasing contact resistance and local heating
+- Cooling system degradation (see F-0601)
+- Vehicle-side connector socket fault concentrating heat at the interface
+
+**Diagnostic steps**
+
+1. Inspect the connector pins visually for discolouration, oxidation, or pitting.
+2. Compare temperature trends across same-model chargers at the same site to isolate ambient vs charger-specific issues.
+3. Verify cooling fan operation (see F-0601) and clean any visible vents.
+4. If only one connector on a multi-connector charger is affected, swap connectors with a matched unit to confirm whether the issue follows the cable or stays with the charger.
+
+**Related telemetry**
+
+- `temperature` field over time during charging
+- `power` derating profile during the affected session
+
+**Known firmware issues**
+
+- None.
+
+### F-0204 — Cabinet over-temperature
+
+<Tip>**Severity:** Error · **Category:** Thermal</Tip>
+
+The cabinet internal temperature has exceeded the critical threshold. The charger has reduced power output significantly or shut down to protect internal components.
+
+**Symptoms**
+
+- Charger transitions to `state: "fault"` or to a heavily power-limited state
+- Multiple connectors affected simultaneously (cabinet-wide issue)
+- Often correlates with seasonal high ambient temperature or sustained high-load operation
+
+**Likely causes**
+
+- Cooling fan failure or significant degradation (F-0601 typically precedes)
+- Air-intake or exhaust vents physically blocked
+- Internal temperature sensor drift reporting falsely high readings
+- Power module operating at sustained high load above the cabinet's continuous-rating
+
+**Diagnostic steps**
+
+1. Measure ambient temperature at the site and compare to the charger's rated operating envelope.
+2. Inspect intake and exhaust vents for blockage (leaves, debris, snow, packaging materials left after install).
+3. Check fan RPM telemetry against expected nominal range.
+4. Compare cabinet temperature readings with portable infrared thermometer to validate sensor calibration.
+5. If sustained high-load is the cause, consider load-balancing or re-scheduling charging to lower ambient periods.
+
+**Related telemetry**
+
+- `temperature` field
+- `cooling_fan_rpm` (proposed extension; see [Proposed extensions](/diagnostics/proposed-extensions))
+- Concurrent power output across all connectors
+
+**Known firmware issues**
+
+- None.
+
+### F-0601 — Cooling fan below nominal RPM
+
+<Tip>**Severity:** Warning · **Category:** Thermal</Tip>
+
+A cabinet cooling fan is reporting RPM below the expected nominal range, suggesting bearing wear, blade obstruction, or driver degradation. Often a precursor to F-0204 if left unaddressed.
+
+**Symptoms**
+
+- Fan-RPM telemetry persistently below nominal (typically 1800 RPM for cabinet fans)
+- Audible change in fan noise — louder, grinding, or intermittent
+- Cabinet temperature trending higher than peer chargers under similar load
+
+**Likely causes**
+
+- Bearing wear from accumulated runtime
+- Foreign-object obstruction in fan blades or housing
+- Fan-driver IC degradation
+- Power supply to fan unit drifting low
+
+**Diagnostic steps**
+
+1. Schedule an on-site inspection — the fan is replaceable as a field-serviceable component.
+2. Visual inspection: blades for damage, housing for debris, electrical connections for corrosion.
+3. Bench-test the replacement fan before deployment to confirm nominal RPM at rated voltage.
+4. Reset the fan-runtime counter after replacement (proposed: `reset_fan_counter` command — see [Proposed extensions](/diagnostics/proposed-extensions)).
+
+**Related telemetry**
+
+- `cooling_fan_rpm` (proposed extension)
+- `cooling_fan_status` field (proposed extension)
+- Cabinet `temperature` trend
+
+**Known firmware issues**
+
+- None.
+
+## Connectivity
+
+### F-0301 — Heartbeat lost
+
+<Tip>**Severity:** Error · **Category:** Connectivity</Tip>
+
+The charger has not sent a heartbeat to the platform within the expected interval (typically 30 seconds, configurable). Subsequent commands and telemetry collection are interrupted until the connection is re-established.
+
+**Symptoms**
+
+- `last_heartbeat` field on the device shows a stale timestamp
+- Device's `status` flips to `offline` after the grace period
+- Any in-flight remote commands fail or queue indefinitely
+
+**Likely causes**
+
+- Site network outage (most common — verify upstream connectivity first)
+- WebSocket connection dropped without clean close (see F-0302)
+- Charger power-cycle in progress
+- DNS resolution failure on the charger if base URL changed unexpectedly
+- TLS certificate expiry on either end
+
+**Diagnostic steps**
+
+1. Check site-level network status — if multiple chargers at the same site go offline simultaneously, the issue is upstream of any individual charger.
+2. Inspect the WebSocket reconnect history (proposed: `network` endpoint) for the affected device.
+3. From an on-site engineer, ping the charger's local IP and check whether the charger itself is responsive on local network.
+4. If the site network is healthy, schedule a controlled reboot of the affected charger via [Remote diagnostic commands](/diagnostics/proposed-extensions).
+
+**Related telemetry**
+
+- `last_heartbeat`
+- `online_since` and `offline_since` transitions
+- Reconnect history
+
+**Known firmware issues**
+
+- None.
+
+### F-0302 — Reconnect storm
+
+<Tip>**Severity:** Warning · **Category:** Connectivity</Tip>
+
+The charger has reconnected to the platform repeatedly within a short window (typically more than 5 reconnects in 10 minutes), suggesting an unstable network path or a flapping endpoint.
+
+**Symptoms**
+
+- Frequent `online` ↔ `offline` transitions
+- Telemetry gaps on the affected charger
+- Network-health score (proposed) trending downward
+
+**Likely causes**
+
+- Marginal cellular signal at site (most common for outdoor / motorway-services chargers)
+- Site router or firewall actively closing idle connections
+- WebSocket keep-alive interval mismatch between charger firmware and platform configuration
+- Charger firmware regression affecting reconnect-backoff logic
+
+**Diagnostic steps**
+
+1. If multiple chargers at the same site exhibit the pattern, focus on site-network infrastructure.
+2. Check site cellular signal strength (if applicable) — replace antenna or upgrade router if marginal.
+3. Confirm site firewall/NAT timeout is longer than the platform's configured WebSocket keep-alive interval.
+4. If isolated to one charger, schedule a reboot.
+
+**Related telemetry**
+
+- Reconnect count over time windows
+- WebSocket handshake duration
+
+**Known firmware issues**
+
+- None.
+
+## Communication
+
+### F-0411 — Power module communication timeout
+
+<Tip>**Severity:** Error · **Category:** Communication</Tip>
+
+The charger's main controller has not received an expected response from one of the internal power modules within the protocol timeout. Power output is suspended until the module is restored or isolated.
+
+**Symptoms**
+
+- Connector linked to the affected module transitions to `state: "fault"`
+- Other connectors on the same charger may continue to function (depending on power-module topology)
+- Power output reduces to the remaining module's capacity
+
+**Likely causes**
+
+- CAN bus contention or wiring issue inside the cabinet
+- Power-module firmware crashed or hung
+- Termination resistor failure
+- DC bus over-voltage triggering protective shutdown of the module
+
+**Diagnostic steps**
+
+1. Note which power module is reporting the timeout (telemetry includes module index).
+2. From the platform, attempt a soft-reset of the affected module (proposed: `reset_power_module` command).
+3. If the soft-reset resolves it, monitor for recurrence.
+4. If recurrence frequency exceeds 1× per day, schedule on-site investigation of the CAN bus wiring and the module itself.
+
+**Related telemetry**
+
+- Per-module status fields (proposed extension)
+- Bus voltage and current at fault time
+
+**Known firmware issues**
+
+- None.
+
+## Configuration
+
+### F-0512 — Configuration profile mismatch
+
+<Tip>**Severity:** Warning · **Category:** Configuration</Tip>
+
+The charger's running configuration differs from the configuration profile assigned to it in the platform. Drift typically occurs after a manual local override or following a partial firmware upgrade.
+
+**Symptoms**
+
+- Charger reports a `config_profile_id` that does not match the expected profile
+- Behaviour observed in the field doesn't match the configured profile (e.g., charging at lower power than expected)
+
+**Likely causes**
+
+- Local technician applied a manual override during a service visit
+- Configuration push from the platform was interrupted mid-deployment
+- Profile schema version mismatch between platform and firmware
+
+**Diagnostic steps**
+
+1. Compare the charger's reported `config_profile_id` and `running_config` hash against the expected profile.
+2. Investigate the service log for recent on-site visits.
+3. Re-apply the canonical profile from the platform's configuration management.
+4. Confirm by re-querying the device and verifying the profile hash now matches.
+
+**Related telemetry**
+
+- `config_profile_id`
+- `running_config` hash (proposed extension)
+
+**Known firmware issues**
+
+- None.
+
+## V2G (Vehicle-to-Grid)
+
+### F-0701 — V2G inverter sync lost
+
+<Tip>**Severity:** Error · **Category:** V2G</Tip>
+
+The bidirectional inverter has lost synchronisation with the grid waveform, halting any active discharge session. Specific to V2G-capable chargers (typically the TP-DC180 V2G variant).
+
+**Symptoms**
+
+- V2G discharge session aborts mid-flow
+- Connector state transitions from `discharging` directly to `fault`
+- Inverter health metric (proposed extension) drops sharply
+
+**Likely causes**
+
+- Grid voltage or frequency excursion outside the inverter's operating envelope
+- Phase-locked-loop drift in the inverter control firmware
+- Bidirectional contactor failure or weld-related delay (see F-0101)
+- ISO 15118-20 negotiation timeout with the connected vehicle
+
+**Diagnostic steps**
+
+1. Cross-reference grid event records — if multiple V2G chargers in the same area lost sync simultaneously, the cause is grid-side and outside Tellus's control.
+2. Check inverter health metric trend over the past 24 hours.
+3. Verify firmware version supports the vehicle's ISO 15118-20 dialect (some early V2G-capable EVs require firmware 4.0.0+).
+4. If isolated to one charger, schedule on-site inspection of the bidirectional contactor and inverter unit.
+
+**Related telemetry**
+
+- `inverter_sync_status` (proposed extension)
+- `bidirectional_inverter_cycles` (proposed extension)
+- Connector `state` transitions during the affected session
+
+**Known firmware issues**
+
+- Firmware 4.0.0 has known issues with certain Stellantis / Free2move DrossOne vehicles. Resolved in 4.1.0.
+
+### F-0702 — EV battery management refused discharge
+
+<Tip>**Severity:** Warning · **Category:** V2G</Tip>
+
+The vehicle's battery management system explicitly refused a discharge request from the charger, typically because the vehicle's V2G-eligibility conditions were not met. Not a charger-side fault, but reported as a fault for visibility.
+
+**Symptoms**
+
+- Discharge command issued but session never enters `state: "discharging"`
+- Vehicle communicates a refusal code over ISO 15118-20
+
+**Likely causes**
+
+- Vehicle SOC below the BMS minimum-discharge threshold (typically 20%)
+- Vehicle in a non-V2G-eligible state (e.g., active maintenance mode)
+- Vehicle model not certified for V2G with the connected partner CPMS
+- Time-of-day restriction configured at the vehicle level
+
+**Diagnostic steps**
+
+1. Verify the vehicle's V2G eligibility via partner records (vehicle make / model / firmware).
+2. Confirm the vehicle SOC is above the discharge floor.
+3. If the vehicle is on the partner-confirmed V2G list and SOC is sufficient, escalate to the vehicle OEM via the integration partner.
+4. This fault doesn't typically require any charger-side action.
+
+**Related telemetry**
+
+- Connector `state` transitions
+- ISO 15118-20 refusal code (in event `data` payload)
+
+**Known firmware issues**
+
+- None.
+
+## Charging process
+
+### F-0805 — Session terminated unexpectedly
+
+<Tip>**Severity:** Warning · **Category:** Charging process</Tip>
+
+A charging session terminated due to a condition the charger did not anticipate, distinct from clean stops (user-initiated, target-SOC reached, time-limit reached). Diagnostic value lies in the secondary `details` payload accompanying the event.
+
+**Symptoms**
+
+- Session ends without a clean reason in the charging-record `stop_reason`
+- May correlate with vehicle-side events (sudden disconnect, BMS protective shutdown)
+
+**Likely causes**
+
+- Vehicle pulled the connector mid-session (most common — the cleanest interpretation is `stop_reason: "ev_disconnected"`)
+- Brief network outage caused the session-state state machine to abort
+- Vehicle's BMS protective shutdown (overheating battery, SoC anomaly)
+- Mechanical fault in the connector locking mechanism
+
+**Diagnostic steps**
+
+1. Inspect the charging-record `stop_reason` and `details` payload.
+2. Cross-reference with concurrent fault events on the same connector.
+3. If repeated on the same charger, inspect the connector locking mechanism on-site.
+
+**Related telemetry**
+
+- Charging record `stop_reason`
+- Concurrent events from the same `connector_id`
+
+**Known firmware issues**
+
+- None.
+
+## Reporting unknown codes
+
+If you observe a fault code not documented here, please report it to [support@telluspowergroup.com](mailto:support@telluspowergroup.com) with:
+
+- The full event payload (`fault_code`, `fault_message`, `details`)
+- The affected `device_id` and `firmware_version`
+- The timestamp range during which the issue occurred
+- Any concurrent telemetry that might help triage
+
+The Tellus tech team will investigate, document the code, and update this dictionary in a subsequent revision.
