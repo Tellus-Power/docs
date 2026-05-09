@@ -1,0 +1,120 @@
+---
+title: "Authentication"
+description: "OAuth2 client-credentials for operator integrations, bearer-token auth for chargers, and the patterns Tellus recommends for production deployments."
+---
+
+The Tellus Open Platform API uses **OAuth2 client-credentials** for partner / operator integrations and a **bearer-token** scheme for chargers themselves. This guide covers both, plus the optional HMAC-SHA256 request signing for high-security operations.
+
+## Operator-side authentication
+
+CPMS providers, EMS partners, aggregators, and Tellus-internal services authenticate using OAuth2 client-credentials.
+
+### How it works
+
+You receive a `client_id` and `client_secret` from the Tellus platform team. You exchange these for a short-lived access token by POSTing to the token endpoint:
+
+```bash
+POST /v1/operator/oauth/token
+{
+  "client_id": "...",
+  "client_secret": "...",
+  "grant_type": "client_credentials"
+}
+```
+
+The response returns a Bearer access token valid for 24 hours.
+
+### Scopes
+
+Your `client_id` is provisioned with one or both of the following scopes:
+
+- **`read`** — query sites, devices, charging records, telemetry, aggregated energy
+- **`write`** — issue control commands (start, stop, V2G discharge, schedule, flexibility)
+
+For initial integrations and ongoing read-only consumers, request `read` only — it removes any risk of an integration bug affecting real chargers. Add `write` once your client has been validated against the test environment.
+
+### Token lifecycle
+
+Tokens expire after 86,400 seconds (24 hours). Most production clients refresh proactively a few minutes before expiry rather than waiting for a 401:
+
+```typescript
+let token: { access_token: string; expires_at: number } | null = null;
+
+async function getToken() {
+  if (token && token.expires_at > Date.now() + 60_000) return token.access_token;
+
+  const res = await fetch('/v1/operator/oauth/token', { method: 'POST', /* ... */ });
+  const data = await res.json();
+  token = {
+    access_token: data.access_token,
+    expires_at: Date.now() + (data.expires_in - 60) * 1000,  // refresh 1 min early
+  };
+  return token.access_token;
+}
+```
+
+### Best practices
+
+<Warning>
+Never embed `client_id` or `client_secret` in a frontend application or commit them to version control. Both are equivalent to a password.
+</Warning>
+
+- Store credentials in a server-side secret store (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault, Cloudflare Workers Secrets, etc.).
+- Use a Backend-For-Frontend (BFF) pattern: your frontend calls your own backend, which holds the Tellus credentials and proxies API requests with the access token attached server-side.
+- Rotate `client_secret` periodically. Tellus supports rotation via a coordinated swap — contact the platform team to schedule.
+- Use separate `client_id`s for production and test environments. Don't reuse production credentials in development.
+
+## Charger-side authentication
+
+Chargers themselves authenticate using a `device_id` + `device_secret` pair issued at registration.
+
+### Registration
+
+On first connection, a charger calls `POST /v1/device/register` with its serial number, model, manufacturer, firmware version, and (optionally) MAC address. The platform returns a unique `device_id` and `device_secret`.
+
+### Token exchange
+
+Subsequent calls use a Bearer token obtained by:
+
+```bash
+POST /v1/device/token
+{
+  "device_id": "...",
+  "device_secret": "...",
+  "grant_type": "client_credentials"
+}
+```
+
+Token validity is 24 hours, same as the operator side.
+
+### Key rotation
+
+Periodic rotation of `device_secret` is recommended and can be performed via a dedicated rotation endpoint. Coordinate with the Tellus platform team for production fleets.
+
+## Optional: request signing
+
+For high-security control operations, requests may additionally be signed using HMAC-SHA256. The signature covers `HTTP_METHOD + REQUEST_PATH + TIMESTAMP + REQUEST_BODY` and is placed in the `X-Signature` header. The platform verifies the signature using the device or client secret.
+
+This is optional — most integrations don't enable it — but available for operators who need defence-in-depth on critical commands.
+
+## Common questions
+
+<AccordionGroup>
+
+<Accordion title="What if my access token expires mid-request?">
+The API returns HTTP 401 with `code: 2002`. Refresh the token by calling `POST /v1/operator/oauth/token` again with the same `client_id` and `client_secret`, then retry the original request. Most client libraries handle this automatically.
+</Accordion>
+
+<Accordion title="Can I use the same client_id from multiple servers?">
+Yes — the same `client_id` can be used concurrently from multiple instances. The token returned is shared, and refreshing from one instance does not invalidate others. For operational simplicity, a single shared cache (e.g., Redis) holding the current token across instances is a common pattern.
+</Accordion>
+
+<Accordion title="How do I get sandbox credentials?">
+Email [support@telluspowergroup.com](mailto:support@telluspowergroup.com) and request a test `client_id` / `client_secret` alongside any production credentials. Sandbox credentials hit a separate test environment with synthetic data — safer for verifying write/control endpoints before promoting to production.
+</Accordion>
+
+<Accordion title="What's the difference between operator and charger authentication?">
+Operator authentication is for *external clients* — CPMS providers, EMS partners, aggregators, Tellus-side services — that consume data and issue control commands across many chargers. Charger authentication is for *the chargers themselves* — embedded firmware reporting heartbeat and telemetry to the platform, fetching commands. They use different token endpoints and different credential types.
+</Accordion>
+
+</AccordionGroup>
