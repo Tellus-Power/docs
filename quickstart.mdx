@@ -1,88 +1,181 @@
 ---
-title: "Quickstart: Publish Your First Mintlify Docs"
-description: "Set up your Mintlify docs site in three steps: clone your repo, preview locally with the CLI, and publish by pushing to your default branch."
-icon: "rocket"
+title: "Quickstart"
+description: "Authenticate, list your sites, and make your first request to the Tellus Open Platform API in under five minutes."
 ---
 
-Mintlify gives you a live documentation site from a GitHub repository. This guide walks you through cloning your docs repo, previewing it locally, and publishing your first change.
+This guide takes you from zero to a working integration. By the end, you'll have authenticated a client, listed your accessible sites, retrieved a charger's live state, and subscribed to the realtime telemetry stream.
 
-## Step 1: Set up your local environment
+## Before you start
+
+You need a `client_id` and `client_secret` issued by the Tellus platform team. These are not self-service today — request them by emailing [support@telluspowergroup.com](mailto:support@telluspowergroup.com) or via your Tellus partnership contact, specifying:
+
+- The name of your organisation and the platform you're integrating from
+- Whether you need **production read-only** scope (read live fleet data) or **test sandbox** scope (verify write / control endpoints)
+- The IP ranges or domains your client will call from (for CORS and IP allowlisting)
+
+Tellus typically responds within one business day with credentials, the production and test base URLs, and any partner-specific configuration.
+
+<Note>
+The base URL shown throughout the API Reference (`api.telluspower.example.com`) is a placeholder. The real production hostname is provided alongside your credentials.
+</Note>
+
+## Step 1 — Get an access token
+
+Exchange your `client_id` and `client_secret` for a Bearer access token. Tokens are valid for **24 hours**; refresh by calling the same endpoint again before expiry.
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url https://api.telluspower.example.com/v1/operator/oauth/token \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+    "grant_type": "client_credentials"
+  }'
+```
+
+```typescript TypeScript
+const res = await fetch('https://api.telluspower.example.com/v1/operator/oauth/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    client_id: process.env.TELLUS_CLIENT_ID,
+    client_secret: process.env.TELLUS_CLIENT_SECRET,
+    grant_type: 'client_credentials',
+  }),
+});
+const { access_token, expires_in } = await res.json();
+```
+
+```python Python
+import os, requests
+
+res = requests.post(
+    'https://api.telluspower.example.com/v1/operator/oauth/token',
+    json={
+        'client_id': os.environ['TELLUS_CLIENT_ID'],
+        'client_secret': os.environ['TELLUS_CLIENT_SECRET'],
+        'grant_type': 'client_credentials',
+    },
+)
+access_token = res.json()['access_token']
+```
+
+</CodeGroup>
+
+The response shape:
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 86400
+}
+```
+
+Store the `access_token` securely — typically in a server-side secret store, never in browser-accessible code.
+
+<Warning>
+Never embed `client_id` or `client_secret` in a frontend application or commit them to version control. Use environment variables and a server-side proxy or Backend-For-Frontend (BFF) pattern.
+</Warning>
+
+## Step 2 — List the sites you have access to
+
+Pass the access token in the `Authorization` header on every subsequent request.
+
+```bash cURL
+curl https://api.telluspower.example.com/v1/operator/sites \
+  --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+```
+
+A successful response returns a paged list of sites with location coordinates, total connectors, status summary, and power capacity.
+
+## Step 3 — Get a charger's live state
+
+```bash cURL
+curl https://api.telluspower.example.com/v1/operator/devices/dvc_a1b2c3d4e5f6 \
+  --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+```
+
+The response includes per-connector status, last-known power and energy delivered, voltage, current, SOC, and temperature — sourced from the most recent telemetry frame the platform received.
+
+## Step 4 — Subscribe to realtime telemetry
+
+For sub-second telemetry updates across multiple devices, open a WebSocket connection and pass the access token in the `Authorization` header during the handshake — or, if your WebSocket client doesn't support custom handshake headers, as a `?token=...` query parameter.
+
+```typescript TypeScript
+const ws = new WebSocket(
+  `wss://api.telluspower.example.com/v1/operator/stream?devices=dvc_001,dvc_002&token=${accessToken}`
+);
+
+ws.onmessage = (event) => {
+  const frame = JSON.parse(event.data);
+  // frame: { device_id, timestamp, connectors: [{ connector_id, state, power, energy_delivered, soc }] }
+  console.log(`${frame.device_id} connector ${frame.connectors[0].connector_id}: ${frame.connectors[0].power} kW`);
+};
+```
+
+The server pushes one frame per device per cadence interval (typically every few seconds while a connector is active).
+
+## Step 5 — Issue a control command (`write` scope)
+
+Remote control endpoints — `start`, `stop`, V2G `discharge`, `schedule`, `flexibility` — require a `write` scope on your `client_id`. Verify each command against the test sandbox before calling against production; these affect real chargers and real customers.
+
+```bash cURL
+curl --request POST \
+  https://api.telluspower.example.com/v1/operator/devices/dvc_001/connectors/1/start \
+  --header 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{ "charge_power": 7.0, "duration": 3600, "target_soc": 80 }'
+```
+
+The response returns a `command_id` you can poll via `GET /operator/commands/{command_id}` to track acceptance and completion.
+
+## Common patterns
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs repository">
-    Your docs repository was created during Mintlify onboarding. Find the link in your [dashboard](https://dashboard.mintlify.com).
 
-    Clone it to your machine using the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    Install the Mintlify CLI and run it from your docs directory:
+<Accordion title="Token refresh">
+Access tokens last 24 hours. Refresh by calling `POST /v1/operator/oauth/token` again with the same `client_id` and `client_secret`. Most production clients refresh proactively a few minutes before expiry rather than waiting for a 401.
+</Accordion>
 
-    ```bash
-    npm i -g mint
-    mint dev
-    ```
+<Accordion title="Error handling">
+All errors follow the envelope `{ code, message, details? }`. Common codes:
 
-    Open [http://localhost:3000](http://localhost:3000) to see your docs live.
+- `1001` — Invalid request parameters
+- `1002` — Missing required parameter
+- `2001` — Unauthenticated or invalid token
+- `2002` — Token expired (refresh and retry)
+- `2003` — Permission denied
+- `3001` — Resource not found
+- `4001` — Resource conflict (e.g., device already registered)
+- `5001` — Rate-limited
+- `9001` — Internal server error (please report)
 
-    <Tip>Your preview updates automatically as you edit files — no refresh needed.</Tip>
-  </Accordion>
-</AccordionGroup>
+See the [API Reference](/api-reference) for the full table.
+</Accordion>
 
-## Step 2: Make your first change
+<Accordion title="Rate limits">
+Operator endpoints: **60 requests/minute** for queries, **30 requests/minute** for batch control commands. Exceeded limits return HTTP 429 with `code: 5001`. Add exponential backoff to your client.
+</Accordion>
 
-<AccordionGroup>
-  <Accordion icon="palette" title="Update your site name and colors">
-    Open `docs.json` and update the `name` and `colors` fields to match your brand:
+<Accordion title="Coexistence with OCPP">
+Tellus chargers running firmware 260420.0107 and later accept **simultaneous OCPP and Open Platform API connections to separate backends**. Your operational CPMS can keep its OCPP link live (Spirii, Driivz, ChargePoint, your own — any OCPP-compliant CSMS) while a complementary Tellus-side service consumes the Open Platform feed for diagnostics, grid services, or value-added analytics.
 
-    ```json docs.json
-    {
-      "name": "My Product Docs",
-      "colors": {
-        "primary": "#0066FF",
-        "light": "#66A3FF",
-        "dark": "#004ACC"
-      }
-    }
-    ```
+This is intentional design: Tellus's Open Platform API is *complementary* to your CPMS, not a replacement.
+</Accordion>
 
-    Save the file and watch your local preview update instantly.
-  </Accordion>
-  <Accordion icon="github" title="Install the Mintlify GitHub app">
-    Install the Mintlify GitHub app from your [dashboard settings](https://dashboard.mintlify.com/settings/organization/github-app).
-
-    The GitHub app automatically deploys every push to your default branch — no manual deploy steps needed.
-  </Accordion>
-</AccordionGroup>
-
-## Step 3: Go live
-
-<AccordionGroup>
-  <Accordion icon="rocket" title="Publish your docs">
-    Commit and push your changes to your repository's default branch:
-
-    ```bash
-    git add .
-    git commit -m "Customize docs branding"
-    git push
-    ```
-
-    Your docs update within seconds of the push.
-  </Accordion>
 </AccordionGroup>
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Write content" icon="pen-to-square" href="/essentials/markdown">
-    Learn MDX syntax and start writing your documentation.
+  <Card title="Browse the API Reference" icon="code" href="/api-reference">
+    Every endpoint with an interactive "Try it" console, fully documented schemas, and example payloads.
   </Card>
-  <Card title="Customize style" icon="palette" href="/essentials/settings">
-    Fine-tune your brand, navigation, and site identity.
-  </Card>
-  <Card title="Add code examples" icon="code" href="/essentials/code">
-    Include syntax-highlighted code blocks and multi-language examples.
-  </Card>
-  <Card title="API documentation" icon="terminal" href="/api-reference/introduction">
-    Auto-generate API docs from your OpenAPI specification.
+  <Card title="Tellus Console" icon="gauge" href="https://console.telluspowergroup.com">
+    See a working application built entirely on this API — operations, diagnostics, V2G, and AI agents.
   </Card>
 </CardGroup>
