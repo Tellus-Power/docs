@@ -1,94 +1,2411 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
-    "license": {
-      "name": "MIT"
+    "title": "Tellus Open Platform API",
+    "version": "1.3.0",
+    "summary": "Charger-platform integration API for CPMS, EMS, aggregators, and chargers.",
+    "description": "The Tellus Open Platform API enables Charging Point Management Systems (CPMS),\nEnergy Management Systems (EMS), aggregators and chargers themselves to integrate\nwith the Tellus charging-platform infrastructure.\n\nThe API is divided into three logical surfaces:\n\n- **Operator-side API** (`/v1/operator/...`) \u2014 used by CPMS, EMS, and aggregators\n  to query the fleet, retrieve charging records, control chargers, schedule charging,\n  issue load-flexibility commands, and subscribe to a real-time telemetry WebSocket.\n- **Charger-side API** (`/v1/device/...`) \u2014 used by chargers themselves for\n  registration, heartbeat, telemetry, event reporting, charging-record upload,\n  command fetching (long-polling), command-status reporting, and firmware-upgrade\n  status.\n- **Operator-to-operator interop (legacy)** \u2014 an older roaming-style interface\n  (PascalCase, PUT-based) used for data exchange between operator platforms,\n  modelled after China's national charging-interop standard. Most modern partners\n  should integrate via the Operator-side API instead.\n\nAll requests use HTTPS (TLS 1.2 or higher). Plain HTTP is not supported.\nAll bodies are `application/json`. Timestamps are ISO 8601 UTC.\nEnergy is in kWh, power in kW, current in A, voltage in V, temperature in \u00b0C,\nand SOC is an integer percentage 0\u2013100.\n\nOptional request signing using HMAC-SHA256 is supported for high-security\noperations (see \u00a72.2.4 of the v1.3 specification).\n",
+    "contact": {
+      "name": "Tellus Power \u2014 Platform Team",
+      "url": "https://www.telluspowergroup.com"
     },
-    "version": "1.0.0"
+    "license": {
+      "name": "Proprietary \u2014 Tellus Power Group"
+    }
   },
   "servers": [
     {
-      "url": "http://sandbox.mintlify.com"
-    }
-  ],
-  "security": [
+      "url": "https://api.telluspower.example.com/v1",
+      "description": "Production (HOSTNAME PENDING).\nThe v1.3 specification uses `api.chargingplatform.com` as a placeholder; the\nreal production hostname has not yet been confirmed by the developer team.\n"
+    },
     {
-      "bearerAuth": []
+      "url": "https://api-test.telluspower.example.com/v1",
+      "description": "Test / Sandbox (HOSTNAME PENDING). To be confirmed by the developer team.\n"
     }
   ],
+  "tags": [
+    {
+      "name": "Operator \u2014 Authentication",
+      "description": "OAuth2 client-credentials grant for CPMS / EMS / Aggregator integrations."
+    },
+    {
+      "name": "Operator \u2014 Sites & Devices",
+      "description": "Read-only resource queries \u2014 sites accessible to the authenticated client, and per-device detail with connector states."
+    },
+    {
+      "name": "Operator \u2014 Remote Control",
+      "description": "Initiate charging, stop charging, V2G discharge, and set charging schedules remotely."
+    },
+    {
+      "name": "Operator \u2014 Charging Records",
+      "description": "Historical session data (CDR \u2014 Charging Detail Records)."
+    },
+    {
+      "name": "Operator \u2014 Energy & Flexibility",
+      "description": "Aggregated energy time-series and load-flexibility / demand-response control."
+    },
+    {
+      "name": "Operator \u2014 Commands",
+      "description": "Track execution of issued commands."
+    },
+    {
+      "name": "Operator \u2014 Telemetry Stream (WebSocket)",
+      "description": "Real-time telemetry subscription via WebSocket. Documented here for reference; the connection is established outside the OpenAPI request/response model."
+    },
+    {
+      "name": "Charger \u2014 Provisioning",
+      "description": "First-time device registration and access-token issuance."
+    },
+    {
+      "name": "Charger \u2014 Reporting",
+      "description": "Heartbeat, real-time telemetry, event reporting, charging-record upload."
+    },
+    {
+      "name": "Charger \u2014 Commands",
+      "description": "Long-polling for pending commands and reporting their execution status."
+    },
+    {
+      "name": "Charger \u2014 Firmware",
+      "description": "Firmware upgrade status reporting."
+    },
+    {
+      "name": "Operator-to-operator (legacy interop)",
+      "description": "Older roaming-style interface (PascalCase fields, PUT methods) used for\ndata exchange between operator platforms. Modern partners should normally\nintegrate via the Operator-side API instead.\n"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "operatorOAuth2": {
+        "type": "oauth2",
+        "description": "OAuth2 client-credentials grant for operator-side integrations.\nObtain an access token by POSTing `client_id` and `client_secret`\nto `/v1/operator/oauth/token`. Tokens are valid for 24 hours\n(86,400 seconds).\n",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "/v1/operator/oauth/token",
+            "scopes": {
+              "read": "Read-only access to sites, devices, charging records, telemetry, and aggregated energy.",
+              "write": "Write access \u2014 remote start, stop, discharge, schedule, flexibility commands."
+            }
+          }
+        }
+      },
+      "deviceBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Charger-side bearer token. Obtained by exchanging `device_id` and\n`device_secret` (issued at registration) at `/v1/device/token`.\nValid for 24 hours.\n"
+      }
+    },
+    "parameters": {
+      "PageNumber": {
+        "name": "page",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "description": "Page number (1-indexed)."
+      },
+      "PageSize": {
+        "name": "size",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "description": "Results per page (max 100)."
+      }
+    },
+    "schemas": {
+      "ApiEnvelope": {
+        "type": "object",
+        "description": "Standard response envelope. `code` is `0` on success and a non-zero\napplication code on error (see Error Codes \u2014 \u00a714).\n",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "0 = success; otherwise an error code per the Error Codes section."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable description."
+          },
+          "data": {
+            "description": "Endpoint-specific payload."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelope"
+          }
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "examples": [
+              1001,
+              1002,
+              2001,
+              2002,
+              2003,
+              3001,
+              4001,
+              5001,
+              9001
+            ]
+          },
+          "details": {
+            "type": "object",
+            "description": "Optional diagnostic details (e.g., `{ field, value }`)."
+          }
+        },
+        "example": {
+          "code": 1001,
+          "message": "Parameter 'power' must be positive",
+          "details": {
+            "field": "power",
+            "value": -5
+          }
+        }
+      },
+      "PageMeta": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total matching records."
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          }
+        }
+      },
+      "Location": {
+        "type": "object",
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "properties": {
+          "lat": {
+            "type": "number",
+            "format": "double",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "format": "double",
+            "minimum": -180,
+            "maximum": 180
+          }
+        }
+      },
+      "SiteStatusSummary": {
+        "type": "object",
+        "description": "Counts of connectors at the site by current state.",
+        "properties": {
+          "idle": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "charging": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fault": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Site": {
+        "type": "object",
+        "required": [
+          "site_id",
+          "name"
+        ],
+        "properties": {
+          "site_id": {
+            "type": "string",
+            "description": "Unique site identifier."
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "total_connectors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status_summary": {
+            "$ref": "#/components/schemas/SiteStatusSummary"
+          },
+          "power_capacity": {
+            "type": "number",
+            "description": "Total installed power capacity (kW)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "site_id": "site_001",
+          "name": "Sunshine Charging Station",
+          "address": "1 Sunshine Road, Beijing",
+          "location": {
+            "lat": 39.9042,
+            "lng": 116.4074
+          },
+          "total_connectors": 10,
+          "status_summary": {
+            "idle": 5,
+            "charging": 3,
+            "fault": 2
+          },
+          "power_capacity": 100.0,
+          "created_at": "2024-01-01T00:00:00Z"
+        }
+      },
+      "SitePage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Site"
+            }
+          }
+        }
+      },
+      "ConnectorState": {
+        "type": "string",
+        "enum": [
+          "idle",
+          "charging",
+          "discharging",
+          "fault",
+          "unavailable"
+        ],
+        "description": "Current state of the connector."
+      },
+      "Connector": {
+        "type": "object",
+        "required": [
+          "connector_id",
+          "status"
+        ],
+        "properties": {
+          "connector_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-based connector index, unique within a device."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorState"
+          },
+          "power": {
+            "type": "number",
+            "description": "Current power (kW). Negative when state is `discharging`."
+          },
+          "voltage": {
+            "type": "number",
+            "description": "Voltage (V)."
+          },
+          "current": {
+            "type": "number",
+            "description": "Current (A)."
+          },
+          "energy_delivered": {
+            "type": "number",
+            "description": "Energy delivered in the current session (kWh). 0 if no session."
+          },
+          "soc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "State of charge (%) of the connected vehicle, if known."
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Temperature (\u00b0C)."
+          },
+          "last_telemetry_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "required": [
+          "device_id"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "description": "Platform-issued unique device identifier."
+          },
+          "sn": {
+            "type": "string",
+            "description": "Manufacturer serial number."
+          },
+          "model": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "firmware_version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline"
+            ]
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Connector"
+            }
+          },
+          "last_heartbeat": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "site_id": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "device_id": "dvc_a1b2c3d4e5f6",
+          "sn": "SN1234567890",
+          "model": "AC-7kW-V2",
+          "manufacturer": "ChargeTech",
+          "firmware_version": "2.1.0",
+          "status": "online",
+          "connectors": [
+            {
+              "connector_id": 1,
+              "status": "charging",
+              "power": 6.8,
+              "current": 30.5,
+              "voltage": 223.0,
+              "energy_delivered": 12.3,
+              "soc": 55,
+              "temperature": 38.0,
+              "last_telemetry_time": "2025-03-15T11:00:00Z"
+            }
+          ],
+          "last_heartbeat": "2025-03-15T11:00:00Z",
+          "site_id": "site_001"
+        }
+      },
+      "VehicleInfo": {
+        "type": "object",
+        "properties": {
+          "vin": {
+            "type": "string",
+            "description": "Vehicle Identification Number (17-char ISO 3779)."
+          },
+          "soc_start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "soc_end": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "ChargingRecord": {
+        "type": "object",
+        "required": [
+          "record_id",
+          "device_id",
+          "connector_id",
+          "start_time",
+          "energy"
+        ],
+        "properties": {
+          "record_id": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "connector_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "energy": {
+            "type": "number",
+            "description": "Total energy delivered (kWh)."
+          },
+          "max_power": {
+            "type": "number",
+            "description": "Peak power during session (kW)."
+          },
+          "avg_power": {
+            "type": "number",
+            "description": "Average power during session (kW)."
+          },
+          "cost": {
+            "type": "number",
+            "description": "Session cost. Negative cost indicates revenue earned from a V2G\ndischarge session.\n"
+          },
+          "meter_start": {
+            "type": "number",
+            "description": "Meter reading at start (kWh)."
+          },
+          "meter_end": {
+            "type": "number",
+            "description": "Meter reading at end (kWh)."
+          },
+          "vehicle_info": {
+            "$ref": "#/components/schemas/VehicleInfo"
+          }
+        },
+        "example": {
+          "record_id": "rec_9x8y7z6w",
+          "device_id": "dvc_a1b2c3d4e5f6",
+          "connector_id": 1,
+          "start_time": "2025-03-15T09:00:00Z",
+          "end_time": "2025-03-15T10:30:00Z",
+          "energy": 15.2,
+          "max_power": 7.2,
+          "avg_power": 6.8,
+          "cost": 12.16,
+          "meter_start": 12345.6,
+          "meter_end": 12360.8,
+          "vehicle_info": {
+            "vin": "LVXFA394XJ1234567",
+            "soc_start": 20,
+            "soc_end": 90
+          }
+        }
+      },
+      "ChargingRecordPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChargingRecord"
+            }
+          }
+        }
+      },
+      "AggregatedEnergyGranularity": {
+        "type": "string",
+        "enum": [
+          "hour",
+          "day",
+          "month"
+        ]
+      },
+      "AggregatedEnergyPoint": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string",
+            "description": "Time-bucket label (ISO format, granularity-dependent)."
+          },
+          "charge_energy": {
+            "type": "number",
+            "description": "Total charging energy in the bucket (kWh)."
+          },
+          "discharge_energy": {
+            "type": "number",
+            "description": "Total V2G discharge energy in the bucket (kWh)."
+          },
+          "max_power": {
+            "type": "number",
+            "description": "Peak power observed during the bucket (kW)."
+          },
+          "avg_power": {
+            "type": "number",
+            "description": "Average power during the bucket (kW)."
+          }
+        }
+      },
+      "AggregatedEnergyTotals": {
+        "type": "object",
+        "properties": {
+          "charge_energy": {
+            "type": "number"
+          },
+          "discharge_energy": {
+            "type": "number"
+          },
+          "max_power": {
+            "type": "number"
+          }
+        }
+      },
+      "AggregatedEnergyResponse": {
+        "type": "object",
+        "properties": {
+          "granularity": {
+            "$ref": "#/components/schemas/AggregatedEnergyGranularity"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AggregatedEnergyPoint"
+            }
+          },
+          "total": {
+            "$ref": "#/components/schemas/AggregatedEnergyTotals"
+          }
+        }
+      },
+      "RemoteStartRequest": {
+        "type": "object",
+        "properties": {
+          "charge_power": {
+            "type": "number",
+            "description": "Maximum power limit (kW)."
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Charging duration (seconds)."
+          },
+          "target_soc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "transaction_id": {
+            "type": "string",
+            "description": "External transaction identifier (e.g., the partner CPMS's session ID)."
+          }
+        }
+      },
+      "RemoteStopRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "e.g., `user_request`, `time_limit`, `fault`."
+          }
+        }
+      },
+      "RemoteDischargeRequest": {
+        "type": "object",
+        "required": [
+          "discharge_power"
+        ],
+        "properties": {
+          "discharge_power": {
+            "type": "number",
+            "description": "Discharge power (kW)."
+          },
+          "duration": {
+            "type": "integer"
+          },
+          "min_soc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "DayOfWeek": {
+        "type": "string",
+        "enum": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "ScheduleAction": {
+        "type": "string",
+        "enum": [
+          "charge",
+          "discharge",
+          "idle"
+        ]
+      },
+      "ScheduleType": {
+        "type": "string",
+        "enum": [
+          "once",
+          "daily",
+          "weekly"
+        ]
+      },
+      "TimeSlot": {
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "action"
+        ],
+        "properties": {
+          "day_of_week": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayOfWeek"
+            },
+            "description": "Required for `weekly` schedule type."
+          },
+          "start": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "end": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "power_limit": {
+            "type": "number",
+            "description": "Power limit (kW) within this slot."
+          },
+          "action": {
+            "$ref": "#/components/schemas/ScheduleAction"
+          }
+        }
+      },
+      "ScheduleRequest": {
+        "type": "object",
+        "required": [
+          "schedule_id",
+          "enabled",
+          "type",
+          "time_slots"
+        ],
+        "properties": {
+          "schedule_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ScheduleType"
+          },
+          "time_slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeSlot"
+            }
+          },
+          "target_soc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effective_until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone (e.g., `Europe/London`, `Asia/Shanghai`)."
+          }
+        }
+      },
+      "CommandQueuedResponse": {
+        "type": "object",
+        "required": [
+          "command_id",
+          "status"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued"
+            ]
+          }
+        }
+      },
+      "CommandStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "accepted",
+          "completed",
+          "failed"
+        ]
+      },
+      "CommandStatusResponse": {
+        "type": "object",
+        "required": [
+          "command_id",
+          "status"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommandStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "result": {
+            "type": "object",
+            "description": "Optional command result (e.g., `{ energy_delivered }` after a charging command completes)."
+          }
+        }
+      },
+      "FlexibilityCommand": {
+        "type": "string",
+        "enum": [
+          "set_power_limit",
+          "pause_charging"
+        ]
+      },
+      "FlexibilityRequest": {
+        "type": "object",
+        "required": [
+          "target_type",
+          "command",
+          "params"
+        ],
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "site",
+              "operator",
+              "all"
+            ]
+          },
+          "target_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required when `target_type` is `site` or `operator`."
+          },
+          "command": {
+            "$ref": "#/components/schemas/FlexibilityCommand"
+          },
+          "params": {
+            "type": "object",
+            "description": "Command-specific parameters.\n\n- For `set_power_limit`: `{ power_limit_percent: int 0\u2013100, duration: int seconds, reason?: string }`\n- For `pause_charging`: `{ duration: int seconds, reason?: string }`\n"
+          }
+        },
+        "example": {
+          "target_type": "site",
+          "target_ids": [
+            "site_001",
+            "site_002"
+          ],
+          "command": "set_power_limit",
+          "params": {
+            "power_limit_percent": 50,
+            "duration": 1800,
+            "reason": "grid_overload"
+          }
+        }
+      },
+      "FlexibilityResponse": {
+        "type": "object",
+        "required": [
+          "control_id",
+          "status"
+        ],
+        "properties": {
+          "control_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "executing"
+            ]
+          }
+        }
+      },
+      "DeviceRegisterRequest": {
+        "type": "object",
+        "required": [
+          "sn",
+          "model",
+          "manufacturer",
+          "firmware_version"
+        ],
+        "properties": {
+          "sn": {
+            "type": "string",
+            "description": "Manufacturer serial number."
+          },
+          "model": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "firmware_version": {
+            "type": "string"
+          },
+          "mac": {
+            "type": "string",
+            "description": "MAC address (optional)."
+          }
+        }
+      },
+      "DeviceRegisterResponse": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "device_secret",
+          "expires_in"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "device_secret": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Validity period of the secret (seconds). Periodic rotation is recommended."
+          }
+        }
+      },
+      "DeviceTokenRequest": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "device_secret",
+          "grant_type"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "device_secret": {
+            "type": "string"
+          },
+          "grant_type": {
+            "type": "string",
+            "enum": [
+              "client_credentials"
+            ]
+          }
+        }
+      },
+      "OperatorTokenRequest": {
+        "type": "object",
+        "required": [
+          "client_id",
+          "client_secret",
+          "grant_type"
+        ],
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "grant_type": {
+            "type": "string",
+            "enum": [
+              "client_credentials"
+            ]
+          }
+        }
+      },
+      "AccessTokenResponse": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Token validity period (seconds). Always 86400."
+          }
+        }
+      },
+      "HeartbeatRequest": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "status",
+          "fault_code"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline",
+              "fault"
+            ]
+          },
+          "fault_code": {
+            "type": "integer",
+            "description": "0 = no fault; otherwise platform-defined code."
+          }
+        }
+      },
+      "PendingCommand": {
+        "type": "object",
+        "required": [
+          "command_id",
+          "command",
+          "params"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string",
+            "description": "Command type \u2014 e.g., `start_charging`, `stop_charging`, `set_power_limit`, `set_schedule`, `firmware_upgrade`, `discharge`."
+          },
+          "params": {
+            "type": "object",
+            "description": "Command-specific parameters."
+          },
+          "expiry": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PhaseDetail": {
+        "type": "object",
+        "required": [
+          "voltage",
+          "current"
+        ],
+        "properties": {
+          "voltage": {
+            "type": "number"
+          },
+          "current": {
+            "type": "number"
+          }
+        }
+      },
+      "PhaseDetails": {
+        "type": "object",
+        "properties": {
+          "phase_a": {
+            "$ref": "#/components/schemas/PhaseDetail"
+          },
+          "phase_b": {
+            "$ref": "#/components/schemas/PhaseDetail"
+          },
+          "phase_c": {
+            "$ref": "#/components/schemas/PhaseDetail"
+          }
+        }
+      },
+      "TelemetryUpload": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "connector_id",
+          "state",
+          "voltage",
+          "current",
+          "power",
+          "energy_delivered"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "connector_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "charging",
+              "discharging",
+              "fault"
+            ]
+          },
+          "voltage": {
+            "type": "number"
+          },
+          "current": {
+            "type": "number"
+          },
+          "power": {
+            "type": "number"
+          },
+          "energy_delivered": {
+            "type": "number"
+          },
+          "soc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "temperature": {
+            "type": "number"
+          },
+          "phase_details": {
+            "$ref": "#/components/schemas/PhaseDetails"
+          }
+        }
+      },
+      "EventReport": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "event_type",
+          "connector_id",
+          "data"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "plug_in",
+              "plug_out",
+              "start",
+              "stop",
+              "fault",
+              "alarm"
+            ]
+          },
+          "connector_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "data": {
+            "type": "object",
+            "description": "Event-specific payload. For example:\n\n- `plug_in`: `{ vehicle_connected: boolean }`\n- `fault`: `{ fault_code: int, fault_message: string, details: object }`\n- `start` / `stop`: `{ reason: string }`\n"
+          }
+        }
+      },
+      "ChargingRecordUpload": {
+        "type": "object",
+        "required": [
+          "record_id",
+          "connector_id",
+          "start_time",
+          "end_time",
+          "energy",
+          "max_power",
+          "avg_power",
+          "meter_start",
+          "meter_end"
+        ],
+        "properties": {
+          "record_id": {
+            "type": "string"
+          },
+          "connector_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "energy": {
+            "type": "number"
+          },
+          "max_power": {
+            "type": "number"
+          },
+          "avg_power": {
+            "type": "number"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "meter_start": {
+            "type": "number"
+          },
+          "meter_end": {
+            "type": "number"
+          },
+          "vehicle_info": {
+            "$ref": "#/components/schemas/VehicleInfo"
+          }
+        }
+      },
+      "DeviceCommandStatus": {
+        "type": "object",
+        "required": [
+          "command_id",
+          "status",
+          "timestamp"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected",
+              "completed",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional execution details (e.g., `{ energy_delivered, duration }`)."
+          }
+        }
+      },
+      "FirmwareUpgradeStatus": {
+        "type": "object",
+        "required": [
+          "firmware_version",
+          "status"
+        ],
+        "properties": {
+          "firmware_version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "downloading",
+              "upgrading",
+              "success",
+              "failed"
+            ]
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "TelemetryFrame": {
+        "type": "object",
+        "description": "A single telemetry frame pushed by the operator-side WebSocket telemetry\nstream (\u00a713.2.7). The server emits one frame per device on a regular cadence\n(typically every few seconds) for the device IDs the client subscribed to\nwhen establishing the WebSocket connection.\n",
+        "required": [
+          "device_id",
+          "timestamp",
+          "connectors"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connector_id": {
+                  "type": "integer"
+                },
+                "state": {
+                  "$ref": "#/components/schemas/ConnectorState"
+                },
+                "power": {
+                  "type": "number"
+                },
+                "energy_delivered": {
+                  "type": "number"
+                },
+                "soc": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              }
+            }
+          }
+        },
+        "example": {
+          "device_id": "dvc_a1b2c3d4e5f6",
+          "timestamp": "2025-03-15T11:05:00Z",
+          "connectors": [
+            {
+              "connector_id": 1,
+              "state": "charging",
+              "power": 6.9,
+              "energy_delivered": 13.1,
+              "soc": 58
+            }
+          ]
+        }
+      },
+      "LegacyConnector": {
+        "type": "object",
+        "description": "Legacy roaming-style connector representation.",
+        "required": [
+          "ConnectorId",
+          "Status"
+        ],
+        "properties": {
+          "ConnectorId": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "Status": {
+            "type": "string",
+            "enum": [
+              "Available",
+              "Working",
+              "Fault"
+            ]
+          }
+        }
+      },
+      "LegacyChargePoint": {
+        "type": "object",
+        "description": "Legacy roaming-style charge-point representation.",
+        "required": [
+          "ChargeBoxId",
+          "CreateTime",
+          "Type",
+          "Power",
+          "Longitude",
+          "Latitude",
+          "Connectors"
+        ],
+        "properties": {
+          "ChargeBoxId": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Unique device code."
+          },
+          "CreateTime": {
+            "type": "string",
+            "description": "ISO 8601 format."
+          },
+          "Type": {
+            "type": "string",
+            "enum": [
+              "DC",
+              "AC"
+            ]
+          },
+          "Power": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum power (kW)."
+          },
+          "Longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "Latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "Connectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LegacyConnector"
+            },
+            "minItems": 1
+          }
+        }
+      },
+      "LegacyAcceptResponse": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "string",
+            "enum": [
+              "Accept",
+              "Reject"
+            ]
+          }
+        }
+      },
+      "LegacyMeter": {
+        "type": "object",
+        "description": "Meter information for legacy work-status push.",
+        "required": [
+          "Power",
+          "Voltage",
+          "Current",
+          "WorkValue",
+          "Energy"
+        ],
+        "properties": {
+          "Power": {
+            "type": "number",
+            "description": "Instantaneous power (kW)."
+          },
+          "Voltage": {
+            "type": "number"
+          },
+          "Current": {
+            "type": "number"
+          },
+          "WorkValue": {
+            "type": "number",
+            "description": "Energy scale value (Wh)."
+          },
+          "Energy": {
+            "type": "number",
+            "description": "Electrical energy (kWh)."
+          },
+          "Soc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "LegacyChargingStatus": {
+        "type": "string",
+        "enum": [
+          "STARTING",
+          "START_FAILED",
+          "CHARGING",
+          "WAIT_CP_STOP_CHARGING",
+          "WAIT_PULL_OUT_CONNECTOR",
+          "WAIT_PAY",
+          "COMPLETED"
+        ]
+      },
+      "LegacyDischargingStatus": {
+        "type": "string",
+        "enum": [
+          "STARTING",
+          "START_FAILED",
+          "DISCHARGING",
+          "WAIT_CP_STOP_DISCHARGING",
+          "WAIT_PULL_OUT_CONNECTOR",
+          "WAIT_PAY",
+          "COMPLETED"
+        ]
+      }
+    }
+  },
   "paths": {
-    "/plants": {
+    "/operator/oauth/token": {
+      "post": {
+        "tags": [
+          "Operator \u2014 Authentication"
+        ],
+        "summary": "Obtain an operator access token",
+        "description": "Exchange `client_id` and `client_secret` for a Bearer access token.\nTokens are valid for 24 hours (86,400 seconds).\n",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperatorTokenRequest"
+              },
+              "example": {
+                "client_id": "cpms_123",
+                "client_secret": "sec_456",
+                "grant_type": "client_credentials"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                },
+                "example": {
+                  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+                  "token_type": "Bearer",
+                  "expires_in": 86400
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid client credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/sites": {
       "get": {
-        "description": "Returns all plants from the system that the user has access to",
+        "tags": [
+          "Operator \u2014 Sites & Devices"
+        ],
+        "summary": "List sites",
+        "description": "Retrieves a list of sites accessible to the authenticated client.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "read"
+            ]
+          }
+        ],
         "parameters": [
           {
-            "name": "limit",
+            "$ref": "#/components/parameters/PageNumber"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "name": "status",
             "in": "query",
-            "description": "The maximum number of results to return",
             "schema": {
-              "type": "integer",
-              "format": "int32"
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive"
+              ]
+            },
+            "description": "Optional filter by site status."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sites returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SitePage"
+                    }
+                  }
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "total": 50,
+                    "page": 1,
+                    "size": 20,
+                    "items": [
+                      {
+                        "site_id": "site_001",
+                        "name": "Sunshine Charging Station",
+                        "address": "1 Sunshine Road, Beijing",
+                        "location": {
+                          "lat": 39.9042,
+                          "lng": 116.4074
+                        },
+                        "total_connectors": 10,
+                        "status_summary": {
+                          "idle": 5,
+                          "charging": 3,
+                          "fault": 2
+                        },
+                        "power_capacity": 100.0,
+                        "created_at": "2024-01-01T00:00:00Z"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/devices/{device_id}": {
+      "get": {
+        "tags": [
+          "Operator \u2014 Sites & Devices"
+        ],
+        "summary": "Get charger details",
+        "description": "Retrieves detailed information about a specific charger, including connector states.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Plant response",
+            "description": "Device returned.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Device"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/devices/{device_id}/connectors/{connector_id}/start": {
+      "post": {
+        "tags": [
+          "Operator \u2014 Remote Control"
+        ],
+        "summary": "Remote start charging",
+        "description": "Remotely start charging on a specific connector.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "connector_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteStartRequest"
+              },
+              "example": {
+                "charge_power": 7.0,
+                "duration": 3600,
+                "target_soc": 80,
+                "transaction_id": "txn_20250315001"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommandQueuedResponse"
+                    }
+                  }
+                },
+                "example": {
+                  "code": 0,
+                  "message": "Command sent",
+                  "data": {
+                    "command_id": "cmd_5678",
+                    "status": "queued"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/devices/{device_id}/connectors/{connector_id}/stop": {
+      "post": {
+        "tags": [
+          "Operator \u2014 Remote Control"
+        ],
+        "summary": "Remote stop charging",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "connector_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteStopRequest"
+              },
+              "example": {
+                "reason": "user_request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stop command queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommandQueuedResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/devices/{device_id}/connectors/{connector_id}/discharge": {
+      "post": {
+        "tags": [
+          "Operator \u2014 Remote Control"
+        ],
+        "summary": "Remote discharge (V2G)",
+        "description": "Initiates vehicle-to-grid discharging on a connector. Only valid for V2G-capable hardware.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "connector_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteDischargeRequest"
+              },
+              "example": {
+                "discharge_power": 3.0,
+                "duration": 1800,
+                "min_soc": 20
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discharge command queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommandQueuedResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/devices/{device_id}/connectors/{connector_id}/schedule": {
+      "post": {
+        "tags": [
+          "Operator \u2014 Remote Control"
+        ],
+        "summary": "Set charging schedule",
+        "description": "Stores a scheduled charging plan on the connector. The charger executes the schedule autonomously, even without continuous platform connectivity.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "connector_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleRequest"
+              },
+              "example": {
+                "schedule_id": "sch_001",
+                "enabled": true,
+                "type": "weekly",
+                "time_slots": [
+                  {
+                    "day_of_week": [
+                      "mon",
+                      "tue",
+                      "wed",
+                      "thu",
+                      "fri"
+                    ],
+                    "start": "22:00",
+                    "end": "08:00",
+                    "power_limit": 7.0,
+                    "action": "charge"
+                  }
+                ],
+                "target_soc": 90,
+                "effective_from": "2025-03-16T00:00:00Z",
+                "effective_until": "2025-03-31T23:59:59Z",
+                "timezone": "Europe/London"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Schedule stored."
+          }
+        }
+      }
+    },
+    "/operator/charging-records": {
+      "get": {
+        "tags": [
+          "Operator \u2014 Charging Records"
+        ],
+        "summary": "Query charging records",
+        "description": "Retrieves historical charging records, optionally filtered by device, connector, or time range.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "connector_id",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageNumber"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Charging records returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChargingRecordPage"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/aggregated/energy": {
+      "get": {
+        "tags": [
+          "Operator \u2014 Energy & Flexibility"
+        ],
+        "summary": "Aggregated energy data",
+        "description": "Returns aggregated energy metrics (charge / discharge / max power / avg power) over a specified time period, optionally grouped by site.",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/AggregatedEnergyGranularity"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "group_by",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "site",
+                "operator"
+              ]
+            }
+          },
+          {
+            "name": "site_ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated site IDs to filter to."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated series returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AggregatedEnergyResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/control/flexibility": {
+      "post": {
+        "tags": [
+          "Operator \u2014 Energy & Flexibility"
+        ],
+        "summary": "Load flexibility control",
+        "description": "Sends a load-control command to a group of chargers (e.g., reduce\npower by 50% across an entire site, or pause all charging for 10\nminutes for grid-balancing purposes).\n",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "write"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlexibilityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Flexibility command issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/FlexibilityResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/commands/{command_id}": {
+      "get": {
+        "tags": [
+          "Operator \u2014 Commands"
+        ],
+        "summary": "Get command status",
+        "description": "Retrieves the execution status of a previously issued command (e.g., from a remote-start, stop, discharge, schedule, or flexibility call).",
+        "security": [
+          {
+            "operatorOAuth2": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "command_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Command status returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommandStatusResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operator/stream": {
+      "get": {
+        "tags": [
+          "Operator \u2014 Telemetry Stream (WebSocket)"
+        ],
+        "summary": "Real-time telemetry stream (WebSocket)",
+        "description": "**WebSocket endpoint.** Connect to `wss://<base>/v1/operator/stream?devices=<comma-separated device_ids>`\nwith the access token in the `Authorization` header during the WebSocket\nhandshake (or as a `?token=...` query parameter).\n\nThe server pushes JSON telemetry frames (see `TelemetryFrame` schema)\nfor the subscribed device IDs at the platform's configured cadence.\n\nThis endpoint cannot be tested via the standard \"Try it\" console \u2014 use\na WebSocket client. The schema below describes one frame the server emits.\n",
+        "parameters": [
+          {
+            "name": "devices",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated list of device IDs to subscribe to."
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket handshake successful. Subsequent traffic is JSON-encoded\n`TelemetryFrame` messages, one per device per cadence interval.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryFrame"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/register": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Provisioning"
+        ],
+        "summary": "Register a charger",
+        "description": "Called when a charger connects to the platform for the first time.\nReturns `device_id` and `device_secret` which are then used to\nobtain temporary access tokens via `/v1/device/token`.\n",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRegisterRequest"
+              },
+              "example": {
+                "sn": "SN1234567890",
+                "model": "AC-7kW-V2",
+                "manufacturer": "ChargeTech",
+                "firmware_version": "2.1.0",
+                "mac": "00:1A:2B:3C:4D:5E"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charger registered.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeviceRegisterResponse"
+                    }
+                  }
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "device_id": "dvc_a1b2c3d4e5f6",
+                    "device_secret": "sk_7g8h9j0k1l2m",
+                    "expires_in": 86400
                   }
                 }
               }
             }
           },
           "400": {
-            "description": "Unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "description": "Missing required parameters."
+          },
+          "409": {
+            "description": "Charger already registered."
           }
         }
-      },
+      }
+    },
+    "/device/token": {
       "post": {
-        "description": "Creates a new plant in the store",
+        "tags": [
+          "Charger \u2014 Provisioning"
+        ],
+        "summary": "Obtain charger access token",
+        "description": "Exchange `device_id` + `device_secret` for a temporary Bearer token.",
+        "security": [],
         "requestBody": {
-          "description": "Plant to add to the store",
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+                "$ref": "#/components/schemas/DeviceTokenRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
-            "description": "plant response",
+            "description": "Access token issued.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Plant"
+                  "$ref": "#/components/schemas/AccessTokenResponse"
                 }
               }
             }
           },
-          "400": {
-            "description": "unexpected error",
+          "401": {
+            "description": "Invalid device credentials."
+          }
+        }
+      }
+    },
+    "/device/heartbeat": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Reporting"
+        ],
+        "summary": "Heartbeat",
+        "description": "Periodic (e.g., every 30 seconds) report from the charger of online\nstatus. The response may include pending commands queued for the device.\n",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatRequest"
+              },
+              "example": {
+                "timestamp": "2025-03-15T10:30:00Z",
+                "status": "online",
+                "fault_code": 0
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Heartbeat acknowledged. Pending commands may be returned.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "commands": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PendingCommand"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -96,32 +2413,694 @@
         }
       }
     },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
+    "/device/telemetry": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Reporting"
+        ],
+        "summary": "Real-time telemetry upload",
+        "description": "Periodic upload of real-time electrical telemetry (typically every 5\nseconds during charging or discharging). Supports single-phase and\nthree-phase via the optional `phase_details` block.\n",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryUpload"
+              },
+              "example": {
+                "timestamp": "2025-03-15T10:30:05Z",
+                "connector_id": 1,
+                "state": "charging",
+                "voltage": 220.5,
+                "current": 32.0,
+                "power": 7.04,
+                "energy_delivered": 12.3,
+                "soc": 55,
+                "temperature": 35.2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Telemetry accepted."
+          }
+        }
+      }
+    },
+    "/device/events": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Reporting"
+        ],
+        "summary": "Event reporting",
+        "description": "Reports device events such as plug-in, plug-out, charging start /\nstop, faults, and alarms.\n",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventReport"
+              },
+              "example": {
+                "timestamp": "2025-03-15T10:36:00Z",
+                "event_type": "fault",
+                "connector_id": 1,
+                "data": {
+                  "fault_code": 1001,
+                  "fault_message": "Overcurrent protection",
+                  "details": {
+                    "current": 40.5,
+                    "threshold": 32.0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event accepted."
+          }
+        }
+      }
+    },
+    "/device/charging-records": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Reporting"
+        ],
+        "summary": "Charging-record upload",
+        "description": "After a charging session ends, the charger uploads the complete charging record (CDR).",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChargingRecordUpload"
+              },
+              "example": {
+                "record_id": "rec_9x8y7z6w",
+                "connector_id": 1,
+                "start_time": "2025-03-15T09:00:00Z",
+                "end_time": "2025-03-15T10:30:00Z",
+                "energy": 15.2,
+                "max_power": 7.2,
+                "avg_power": 6.8,
+                "cost": 12.16,
+                "meter_start": 12345.6,
+                "meter_end": 12360.8,
+                "vehicle_info": {
+                  "vin": "LVXFA394XJ1234567",
+                  "soc_start": 20,
+                  "soc_end": 90
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Record accepted."
+          }
+        }
+      }
+    },
+    "/device/commands": {
+      "get": {
+        "tags": [
+          "Charger \u2014 Commands"
+        ],
+        "summary": "Fetch pending command (long polling)",
+        "description": "The charger polls for pending commands using long polling. If no\ncommand is available, the request hangs until the timeout expires\n(default 30 seconds, max 60) or a command arrives.\n",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "description": "ID of plant to delete",
+            "name": "connector_id",
+            "in": "query",
             "required": true,
             "schema": {
               "type": "integer",
-              "format": "int64"
+              "minimum": 1
             }
+          },
+          {
+            "name": "wait",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60,
+              "default": 30
+            },
+            "description": "Maximum wait time in seconds."
           }
         ],
         "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
-          },
-          "400": {
-            "description": "unexpected error",
+          "200": {
+            "description": "Command available, or no command (timeout).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelope"
+                    }
+                  ],
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/PendingCommand"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/command-status": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Commands"
+        ],
+        "summary": "Report command status",
+        "description": "Reports the execution result of a previously received command.",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceCommandStatus"
+              },
+              "example": {
+                "command_id": "cmd_5678",
+                "status": "completed",
+                "message": "Charging finished",
+                "timestamp": "2025-03-15T11:05:00Z",
+                "details": {
+                  "energy_delivered": 7.0,
+                  "duration": 3600
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status accepted."
+          }
+        }
+      }
+    },
+    "/device/firmware/status": {
+      "post": {
+        "tags": [
+          "Charger \u2014 Firmware"
+        ],
+        "summary": "Firmware upgrade status",
+        "description": "The charger reports firmware-upgrade progress or final result.",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmwareUpgradeStatus"
+              },
+              "example": {
+                "firmware_version": "2.2.0",
+                "status": "downloading",
+                "progress": 45,
+                "message": "Downloading..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status accepted."
+          }
+        }
+      }
+    },
+    "/customer/query_station_info": {
+      "put": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Query charge-point information (legacy)",
+        "description": "Legacy interface (\u00a73 of the v1.3 spec). Implemented by the charging\noperator and called by a peer \"data-demander\" platform.\nPascalCase request and response fields, PUT method.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "LastQueryTime": {
+                    "type": "string",
+                    "description": "Last query time, format `yyyy-MM-dd HH:mm:ss`. Empty queries all."
+                  },
+                  "PageNo": {
+                    "type": "integer",
+                    "default": 1
+                  },
+                  "PageSize": {
+                    "type": "integer",
+                    "default": 10
+                  }
+                }
+              },
+              "example": {
+                "LastQueryTime": "2024-01-08 15:30:00",
+                "PageNo": 3,
+                "PageSize": 20
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charge-point list returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "PageNo": {
+                      "type": "integer"
+                    },
+                    "PageCount": {
+                      "type": "integer"
+                    },
+                    "ItemSize": {
+                      "type": "integer"
+                    },
+                    "ChargePoints": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LegacyChargePoint"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customer/notification_stationStatus": {
+      "put": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Notify station status change (legacy)",
+        "description": "Legacy push interface (\u00a74). Implemented by the data-demander platform\nand called by the charging operator when device status changes.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegacyChargePoint"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Push acknowledged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyAcceptResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cp/query_station_status": {
+      "put": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Batch device-status query (legacy)",
+        "description": "Legacy interface (\u00a75). Batch query of real-time status for up to 50 devices.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50
+              },
+              "example": [
+                "Test001",
+                "Test002"
+              ]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charge-point array returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LegacyChargePoint"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cp/start_charging": {
+      "post": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Start charging (legacy)",
+        "description": "Legacy interface (\u00a76). Implemented by the device operator and called by\nthe customer platform. Response time SHOULD NOT exceed 3 seconds.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "OrderId",
+                  "ChargePointId",
+                  "ConnectorId"
+                ],
+                "properties": {
+                  "OrderId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ChargePointId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ConnectorId": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "Note": {
+                    "type": "string",
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charging start command accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "Status": {
+                      "$ref": "#/components/schemas/LegacyChargingStatus"
+                    },
+                    "DeviceVendorOrderId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customer/notify_work_status": {
+      "post": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Push work status (legacy)",
+        "description": "Legacy interface (\u00a77). Implemented by the customer platform and called\nby the device operator after a charge starts or fails. Retry policy:\n5 attempts at intervals of 1m, 5m, 60m, 180m, 24h. After exhaustion,\nthe customer can call `query_station_status` to fetch state.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "OrderId",
+                  "DeviceVendorOrderId",
+                  "ChargePointId",
+                  "ConnectorId",
+                  "ChangeTime",
+                  "Status"
+                ],
+                "properties": {
+                  "OrderId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "DeviceVendorOrderId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ChargePointId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ConnectorId": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "ChangeTime": {
+                    "type": "string",
+                    "description": "yyyy-MM-dd HH:mm:ss"
+                  },
+                  "Status": {
+                    "$ref": "#/components/schemas/LegacyChargingStatus"
+                  },
+                  "Meter": {
+                    "$ref": "#/components/schemas/LegacyMeter"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status push acknowledged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyAcceptResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cp/stop_charging": {
+      "post": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Stop charging (legacy)",
+        "description": "Legacy interface (\u00a78). Response time SHOULD NOT exceed 1 second.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ChargePointId",
+                  "ConnectorId"
+                ],
+                "properties": {
+                  "ChargePointId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ConnectorId": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stop command accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyAcceptResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cp/start_discharging": {
+      "post": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Start discharging (legacy)",
+        "description": "Legacy V2G start interface (\u00a79). Response time SHOULD NOT exceed 3 seconds.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "OrderId",
+                  "ChargePointId",
+                  "ConnectorId"
+                ],
+                "properties": {
+                  "OrderId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ChargePointId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ConnectorId": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "LimitMinSOC": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "LimitMaxEnergy": {
+                    "type": "integer"
+                  },
+                  "Note": {
+                    "type": "string",
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discharge start command accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "Status": {
+                      "$ref": "#/components/schemas/LegacyDischargingStatus"
+                    },
+                    "DeviceVendorOrderId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cp/stop_discharging": {
+      "post": {
+        "tags": [
+          "Operator-to-operator (legacy interop)"
+        ],
+        "summary": "Stop discharging (legacy)",
+        "description": "Legacy interface (\u00a710).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ChargePointId",
+                  "ConnectorId"
+                ],
+                "properties": {
+                  "ChargePointId": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "ConnectorId": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stop discharge accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyAcceptResponse"
                 }
               }
             }
@@ -130,88 +3109,70 @@
       }
     }
   },
-  "webhooks": {
-    "/plant/webhook": {
-      "post": {
-        "description": "Information about a new plant added to the store",
-        "requestBody": {
-          "description": "Plant added to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "The name of the plant",
-            "type": "string"
-          },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
-          }
-        }
-      },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
-          },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
-              }
-            }
-          }
-        ]
-      },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      }
+  "x-error-codes": [
+    {
+      "code": 1001,
+      "http": 400,
+      "description": "Invalid request parameters.",
+      "suggested_action": "Check parameter format."
     },
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
-      }
+    {
+      "code": 1002,
+      "http": 400,
+      "description": "Missing required parameter.",
+      "suggested_action": "Provide the missing parameter."
+    },
+    {
+      "code": 2001,
+      "http": 401,
+      "description": "Unauthenticated or invalid token.",
+      "suggested_action": "Obtain a valid token."
+    },
+    {
+      "code": 2002,
+      "http": 401,
+      "description": "Token expired.",
+      "suggested_action": "Refresh or obtain a new token."
+    },
+    {
+      "code": 2003,
+      "http": 403,
+      "description": "Permission denied.",
+      "suggested_action": "Verify role / permissions."
+    },
+    {
+      "code": 3001,
+      "http": 404,
+      "description": "Resource not found.",
+      "suggested_action": "Check the resource ID."
+    },
+    {
+      "code": 4001,
+      "http": 409,
+      "description": "Resource conflict (e.g., device already registered)."
+    },
+    {
+      "code": 5001,
+      "http": 429,
+      "description": "Too many requests.",
+      "suggested_action": "Reduce request frequency."
+    },
+    {
+      "code": 9001,
+      "http": 500,
+      "description": "Internal server error.",
+      "suggested_action": "Contact platform support."
     }
+  ],
+  "x-rate-limits": {
+    "charger_side": {
+      "high_frequency_endpoints": "10 requests/second per device (heartbeat, telemetry).",
+      "expected_cadence": "Telemetry every 5 seconds; heartbeat every 30 seconds."
+    },
+    "operator_side": {
+      "queries": "60 requests/minute.",
+      "batch_control": "30 requests/minute."
+    },
+    "exceeded": "Exceeding the limit returns HTTP 429 with `code: 5001`."
   }
 }
