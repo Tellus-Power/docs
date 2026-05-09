@@ -1,0 +1,137 @@
+---
+title: "Proposed extensions"
+description: "API extensions to the v1.3 specification proposed for upcoming releases — component-level telemetry, remote diagnostic commands, OCPP version metadata, and service-account authentication."
+---
+
+<Warning>
+The endpoints, fields, and commands described on this page are **proposed** — they are not yet part of the current v1.3 specification and not implemented in production. They represent gaps identified through the build of Tellus's own Diagnostics Console and conversations with early integration partners.
+
+Treat this page as a public roadmap. The Tellus platform team uses it to prioritise upcoming work, and partners can use it to plan integrations against the API surface as it evolves.
+</Warning>
+
+## Why this page exists
+
+Building the Tellus Diagnostics Console on top of the v1.3 API surfaced a small number of capabilities that aren't yet in the spec but would be high-leverage to add. Rather than keep these as private internal asks, we publish them so:
+
+- **Partners** can plan their own integrations against the future API surface
+- **The platform team** has clear, prioritised pressure to implement
+- **Customers** evaluating Tellus can see the trajectory of the platform
+
+Each proposed item is tagged with status:
+
+- 🟢 **Pending implementation** — broadly agreed, on the roadmap, expected in a near-term release
+- 🟡 **Under discussion** — useful and being scoped; not yet committed
+- 🔵 **Exploratory** — interesting but earlier in the design conversation
+
+## 1. Component-level telemetry 🟢
+
+The current §11.1.4 telemetry payload exposes voltage, current, power, energy delivered, SOC, and temperature. The Diagnostics Console's component-health view requires deeper visibility into the charger's internal state — information the charger's firmware already tracks for its own state-machine logic, but does not currently surface to the platform.
+
+**Proposed addition to §11.1.4 telemetry payload:**
+
+```ts
+type TelemetryUpload = {
+  // ... existing fields ...
+  component_health?: {
+    contactor_cycles: number;
+    contactor_max_cycles: number;
+    cooling_fan_rpm: number;
+    cooling_fan_status: 'ok' | 'warning' | 'fault';
+    internal_temps: {
+      power_module: number;
+      control_board: number;
+      ac_inlet: number;
+      dc_outlet: number;
+    };
+    relay_state: 'closed' | 'open' | 'fault';
+    isolation_test_kohms: number;
+    last_isolation_test: string;       // ISO 8601
+    // V2G-capable devices only:
+    bidirectional_inverter_cycles?: number;
+    bidirectional_inverter_max_cycles?: number;
+    harmonic_distortion_v2g_pct?: number;
+    discharge_contactor_cycles?: number;
+  };
+};
+```
+
+**Why we need it.** Without component-level telemetry, predictive maintenance is approximate at best. Knowing contactor cycle counts lets us replace contactors on a schedule rather than after failure. Knowing fan RPM lets us catch F-0204 cabinet over-temp situations days before they happen. Knowing isolation-test resistance trends lets us flag insulation degradation before it becomes a safety issue.
+
+**Status.** Pending implementation. The chargers track these values internally for their own protective logic — surfacing them to the platform is an incremental change rather than new instrumentation.
+
+## 2. Remote diagnostic commands 🟢
+
+§11.1.7 (Fetch Control Commands) defines the long-polling pattern for the platform to deliver commands to chargers. The currently-enumerated command types are operational: `start_charging`, `stop_charging`, `set_power_limit`, `set_schedule`, `firmware_upgrade`, `discharge`. Diagnostics needs a complementary set.
+
+**Proposed new command types:**
+
+| Command | Purpose | Risk class |
+|---|---|---|
+| `reboot` | Soft-restart the charger's main controller | Low — affects only the device, no session impact unless mid-session |
+| `soft_reset` | Reset the charger's state machine without rebooting hardware | Low |
+| `force_reconnect` | Tear down and re-establish the WebSocket connection to the platform | Low |
+| `fetch_logs` | Trigger the charger to upload its on-board log files for inspection | Low (read-only) |
+| `run_self_test` | Execute the charger's built-in self-test sequence and return a structured pass/fail report | Medium — takes the charger out of service for ~2 minutes |
+| `calibrate_sensor` | Recalibrate a named sensor (temperature, current, voltage) against a known reference | Medium — should require physical attendance |
+| `reset_contactor_counter` | Reset the contactor cycle counter after a physical replacement | Low |
+| `reset_fan_counter` | Reset the fan runtime counter after replacement | Low |
+| `reset_power_module` | Soft-reset a named power module (CAN-bus issue recovery) | Medium |
+
+Each command would follow the existing §11.1.7 dispatch pattern (long-polling) and §11.1.8 status reporting (charger reports `accepted`, `completed`, or `failed`).
+
+**Why we need it.** Today, every "rebot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Adding these to the Open Platform API lets Tellus's tech team and authorised partners triage remotely, dramatically reducing time-to-resolution for soft issues.
+
+**Status.** Pending implementation, prioritised by frequency-of-need. `reboot`, `fetch_logs`, and `force_reconnect` are highest priority. `run_self_test` and `calibrate_sensor` have safety implications and need careful design (write scope + customer authorisation + audit log).
+
+## 3. OCPP version and CSMS message-rate metadata 🟡
+
+§13.2.2 (Get Charger Details) returns `connectedHost`, `connectedWsPort`, `connectedWebPort`, `enableConnection`, and similar connectivity fields. For partner diagnostic visibility, two additions would help.
+
+**Proposed additions to the Device entity:**
+
+```ts
+type Device = {
+  // ... existing fields ...
+  ocpp_version?: '1.6-J' | '2.0.1';
+  ocpp_csms_messages_per_minute?: number;       // rolling 5-min average
+  ocpp_csms_last_message_at?: string;            // ISO 8601
+  ocpp_negotiated_features?: string[];           // e.g. SmartCharging, FirmwareManagement
+};
+```
+
+**Why we need it.** When a partner CPMS reports an issue with a Tellus charger, the first triage question is "is the charger talking to the CPMS at all?" Without OCPP-side visibility we have to ask the partner. With it, we can self-serve answer 80% of "the charger isn't responding to my CPMS" tickets.
+
+**Status.** Under discussion. Adds complexity to the platform's data model (OCPP traffic isn't currently surfaced to the Open Platform layer) but the operational benefit is clear.
+
+## 4. Service-account authentication for the admin API 🟡
+
+The legacy admin API at `tellus-op-admin/` requires interactive login with a captcha. This is appropriate for human users of the admin web UI, but blocks programmatic access from partner integrations and from Tellus's own tooling.
+
+**Proposed:**
+
+A new `service_account` credential type, with:
+
+- `service_account_id` and `service_account_secret` issued by the platform team (out-of-band)
+- A long-lived token endpoint that doesn't require captcha
+- Granular scopes matching the admin API's resource model (org / site / device / firmware / configuration)
+- Audit logging on every action taken by a service account
+
+**Why we need it.** Some entities exposed by the admin API are not yet on the Open Platform API. A service-account credential lets Tellus and integration partners populate those entities into our own data spines until the Open Platform endpoints achieve parity. This is the "fallback" path described in the email-to-Peter draft.
+
+**Status.** Under discussion. The platform team has the underlying RBAC; the missing piece is the captcha-bypass authentication endpoint.
+
+## 5. Per-session telemetry archive query 🔵
+
+§13.2.7 (Real-time Telemetry Stream) provides a live WebSocket feed but no historical query. The Diagnostics Console reconstructs power profiles for past sessions from `max_power` / `avg_power` summary fields, which is approximate.
+
+**Proposed:**
+
+A new endpoint `GET /v1/operator/devices/{device_id}/sessions/{record_id}/telemetry` returning the per-second telemetry archive for a completed session — enabling true power-curve reconstruction, fault-during-session correlation, and post-incident analysis.
+
+**Why we'd want it.** Diagnostic value is strongest immediately after a fault. Being able to ask "what was the power profile during the 30 seconds preceding F-0411?" turns guesswork into data. Currently we approximate.
+
+**Status.** Exploratory. Storage implications are non-trivial (per-second telemetry × millions of sessions × multi-year retention). Tiered retention (full resolution for 30 days, 1-min averages for 90 days, summary thereafter) would be a sensible compromise.
+
+## How partners can influence priorities
+
+If your integration would benefit from any of these extensions — or if there's a gap on this page that we haven't identified — please contact [support@telluspowergroup.com](mailto:support@telluspowergroup.com). Demand from real integrations is the strongest signal for the platform team's prioritisation.
