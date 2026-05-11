@@ -79,7 +79,7 @@ type TelemetryUpload = {
 
 Each command would follow the existing §11.1.7 dispatch pattern (long-polling) and §11.1.8 status reporting (charger reports `accepted`, `completed`, or `failed`).
 
-**Why we need it.** Today, every "rebot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Adding these to the Open Platform API lets Tellus's tech team and authorised partners triage remotely, dramatically reducing time-to-resolution for soft issues.
+**Why we need it.** Today, every "reboot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Adding these to the Open Platform API lets Tellus's tech team and authorised partners triage remotely, dramatically reducing time-to-resolution for soft issues.
 
 **Status.** Pending implementation, prioritised by frequency-of-need. `reboot`, `fetch_logs`, and `force_reconnect` are highest priority. `run_self_test` and `calibrate_sensor` have safety implications and need careful design (write scope + customer authorisation + audit log).
 
