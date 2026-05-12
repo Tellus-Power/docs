@@ -5,6 +5,10 @@ description: "OAuth2 client-credentials for operator integrations, bearer-token 
 
 The Tellus Open Platform API uses **OAuth2 client-credentials** for partner / operator integrations and a **bearer-token** scheme for chargers themselves. This guide covers both, plus the optional HMAC-SHA256 request signing for high-security operations.
 
+<Note>
+Every API response uses a consistent envelope shape — `{ "code": 0, "message": "success", "data": ... }`. See [Response envelope](/guides/response-envelope) for the details. Authorization headers, error codes, and pagination all live alongside this envelope.
+</Note>
+
 ## Operator-side authentication
 
 CPMS providers, EMS partners, aggregators, and Tellus-internal services authenticate using OAuth2 client-credentials.
