@@ -38,6 +38,7 @@
           {
             "group": "API basics",
             "pages": [
+              "guides/response-envelope",
               "guides/errors",
               "guides/rate-limits"
             ]
