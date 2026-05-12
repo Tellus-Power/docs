@@ -79,7 +79,7 @@ type TelemetryUpload = {
 
 Each command would follow the existing §11.1.7 dispatch pattern (long-polling) and §11.1.8 status reporting (charger reports `accepted`, `completed`, or `failed`).
 
-**Why we need it.** Today, every "reboot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Adding these to the Open Platform API lets Tellus's tech team and authorised partners triage remotely, dramatically reducing time-to-resolution for soft issues.
+**Why we need it.** Today, every "rebot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Adding these to the Open Platform API lets Tellus's tech team and authorised partners triage remotely, dramatically reducing time-to-resolution for soft issues.
 
 **Status.** Pending implementation, prioritised by frequency-of-need. `reboot`, `fetch_logs`, and `force_reconnect` are highest priority. `run_self_test` and `calibrate_sensor` have safety implications and need careful design (write scope + customer authorisation + audit log).
 
@@ -131,6 +131,24 @@ A new endpoint `GET /v1/operator/devices/{device_id}/sessions/{record_id}/teleme
 **Why we'd want it.** Diagnostic value is strongest immediately after a fault. Being able to ask "what was the power profile during the 30 seconds preceding F-0411?" turns guesswork into data. Currently we approximate.
 
 **Status.** Exploratory. Storage implications are non-trivial (per-second telemetry × millions of sessions × multi-year retention). Tiered retention (full resolution for 30 days, 1-min averages for 90 days, summary thereafter) would be a sensible compromise.
+
+## 6. OAuth refresh-token flow 🟡
+
+The current v1.3 spec (§13.1.1) only describes the client-credentials grant — partners obtain a 24-hour Bearer token by re-exchanging `client_id` and `client_secret`. There is no refresh-token flow, no token-introspection endpoint, and no short-lived access-token / long-lived refresh-token split.
+
+For partners running large, distributed fleets of clients (e.g. multi-region BFFs, edge workers, mobile companion apps), re-exchanging `client_secret` on every refresh creates two operational concerns:
+
+- **`client_secret` exposure surface.** Every node that needs to refresh a token must hold the long-lived secret. A leaked secret requires platform-coordinated rotation across every partner deployment.
+- **Refresh storms.** A 24-hour TTL across thousands of clients tends to cluster — a fleet that deployed simultaneously will all refresh around the same minute 24 hours later. A refresh-token flow with jittered short-lived access tokens avoids this.
+
+**Proposed.**
+
+- Add an OAuth refresh-token grant per RFC 6749 §6, with short-lived access tokens (e.g. 1 hour) and longer-lived refresh tokens (e.g. 30 days), and an optional rotation-on-use mode.
+- Add a token-introspection endpoint per RFC 7662 so partners can validate tokens server-side without round-tripping the full request.
+
+**Why we need it.** Required to operate Tellus credentials at scale without distributing `client_secret` across every client node. Standard pattern for any OAuth2 deployment beyond a single backend integration.
+
+**Status.** Under discussion. Adds complexity to the auth surface, but is the expected pattern for partners building multi-tenant or edge-distributed integrations against the API.
 
 ## How partners can influence priorities
 
