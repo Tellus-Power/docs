@@ -1,0 +1,121 @@
+---
+title: "Response envelope"
+description: "Every Tellus Open Platform API response uses a consistent envelope shape — code, message, data. Understand it once and every endpoint becomes predictable."
+---
+
+Every successful Tellus Open Platform API response uses the same outer shape, regardless of which endpoint you call:
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": { /* endpoint-specific payload */ }
+}
+```
+
+This is intentional. Once you know how to read one response, you know how to read all of them. Pagination, error handling, and retry logic can be written once at the client-library level and applied uniformly.
+
+## The three top-level fields
+
+<ParamField path="code" type="integer" required>
+`0` indicates success. Any non-zero value indicates an error and corresponds to one of the codes in the [Errors guide](/guides/errors).
+</ParamField>
+
+<ParamField path="message" type="string" required>
+A short human-readable status string. `"success"` on the happy path; on failure, a short description of what went wrong.
+</ParamField>
+
+<ParamField path="data" type="object | array | null" required>
+The endpoint-specific payload. Its shape is defined per endpoint in the API Reference. `null` is a valid value for endpoints that don't return a body (e.g. `POST /v1/device/telemetry`).
+</ParamField>
+
+## Examples
+
+### A simple success
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": null
+}
+```
+
+### A list response with pagination
+
+Pagination is always nested inside `data`. The page metadata (`total`, `page`, `size`) lives alongside `items`:
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "items": [
+      { "site_id": "site_001", "name": "Sunshine Charging", "total_connectors": 10 },
+      { "site_id": "site_002", "name": "Hilltop Depot",     "total_connectors": 4  }
+    ],
+    "total": 50,
+    "page": 1,
+    "size": 20
+  }
+}
+```
+
+### A single-object response
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "device_id": "dvc_a1b2c3",
+    "sn": "TP-001-A001",
+    "model": "TP-DC180",
+    "status": "online"
+  }
+}
+```
+
+### A failure
+
+The `code` is non-zero, `message` describes the failure, and `data` is omitted (or `null`):
+
+```json
+{
+  "code": 2001,
+  "message": "unauthenticated",
+  "data": null
+}
+```
+
+The HTTP status code corresponds — see [Errors](/guides/errors) for the full code-to-HTTP mapping.
+
+## Client-library pattern
+
+Most production clients wrap this envelope at the lowest layer of their HTTP client. A typical TypeScript pattern:
+
+```typescript
+type Envelope<T> = { code: number; message: string; data: T | null };
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, init);
+  const env = (await res.json()) as Envelope<T>;
+  if (env.code !== 0) {
+    throw new TellusApiError(env.code, env.message);
+  }
+  return env.data as T;
+}
+```
+
+Every endpoint can then be called with a single line at the calling site:
+
+```typescript
+const { items, total } = await call<SitesPage>('/v1/operator/sites');
+const device         = await call<Device>(`/v1/operator/devices/${id}`);
+```
+
+## What this means for partner BFFs
+
+If you're building a server that implements the v1.3 spec (for example, a sandbox or digital-twin BFF), you **must** return the envelope shape from every endpoint. Returning the raw payload directly will cause client libraries — including the Tellus Diagnostics Console itself — to fail parsing.
+
+The Authorization-protected endpoints additionally accept the standard `Authorization: Bearer <token>` header; see [Authentication](/guides/authentication).
