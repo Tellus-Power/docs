@@ -1,33 +1,27 @@
 ---
 title: "Proposed extensions"
-description: "API extensions to the v1.3 specification proposed for upcoming releases — component-level telemetry, remote diagnostic commands, OCPP version metadata, and service-account authentication."
+description: "Upcoming additions to the Tellus Open Platform API under design or scheduled for a future release."
 ---
 
 <Warning>
-The endpoints, fields, and commands described on this page are **proposed** — they are not yet part of the current v1.3 specification and not implemented in production. They represent gaps identified through the build of Tellus's own Diagnostics Console and conversations with early integration partners.
+The endpoints, fields, and commands described on this page are **proposed**. They are not yet available in production and the exact shapes may change before release.
 
-Treat this page as a public roadmap. The Tellus platform team uses it to prioritise upcoming work, and partners can use it to plan integrations against the API surface as it evolves.
+This page is published as a public roadmap so that integration partners can plan ahead. Partner feedback shapes our priorities — if your integration would benefit from any of these, please [contact us](mailto:support@telluspowergroup.com).
 </Warning>
 
-## Why this page exists
+## Status indicators
 
-Building the Tellus Diagnostics Console on top of the v1.3 API surfaced a small number of capabilities that aren't yet in the spec but would be high-leverage to add. Rather than keep these as private internal asks, we publish them so:
+Each item below is tagged with one of three status indicators:
 
-- **Partners** can plan their own integrations against the future API surface
-- **The platform team** has clear, prioritised pressure to implement
-- **Customers** evaluating Tellus can see the trajectory of the platform
-
-Each proposed item is tagged with status:
-
-- 🟢 **Pending implementation** — broadly agreed, on the roadmap, expected in a near-term release
-- 🟡 **Under discussion** — useful and being scoped; not yet committed
+- 🟢 **Pending implementation** — on the roadmap, expected in a near-term release
+- 🟡 **Under discussion** — useful and being scoped; design not yet final
 - 🔵 **Exploratory** — interesting but earlier in the design conversation
 
 ## 1. Component-level telemetry 🟢
 
-The current §11.1.4 telemetry payload exposes voltage, current, power, energy delivered, SOC, and temperature. The Diagnostics Console's component-health view requires deeper visibility into the charger's internal state — information the charger's firmware already tracks for its own state-machine logic, but does not currently surface to the platform.
+The current telemetry payload exposes voltage, current, power, energy delivered, SOC, and temperature. Component-level health monitoring requires deeper visibility into the charger's internal state — information the charger's firmware already tracks for its own state-machine logic, but does not currently surface to the platform.
 
-**Proposed addition to §11.1.4 telemetry payload:**
+**Proposed addition to the telemetry payload:**
 
 ```ts
 type TelemetryUpload = {
@@ -61,7 +55,7 @@ type TelemetryUpload = {
 
 ## 2. Remote diagnostic commands 🟢
 
-§11.1.7 (Fetch Control Commands) defines the long-polling pattern for the platform to deliver commands to chargers. The currently-enumerated command types are operational: `start_charging`, `stop_charging`, `set_power_limit`, `set_schedule`, `firmware_upgrade`, `discharge`. Diagnostics needs a complementary set.
+The Fetch Control Commands surface defines the long-polling pattern used to deliver commands to chargers. The currently-supported command types are operational: `start_charging`, `stop_charging`, `set_power_limit`, `set_schedule`, `firmware_upgrade`, `discharge`. Diagnostics needs a complementary set.
 
 **Proposed new command types:**
 
@@ -76,16 +70,19 @@ type TelemetryUpload = {
 | `reset_contactor_counter` | Reset the contactor cycle counter after a physical replacement | Low |
 | `reset_fan_counter` | Reset the fan runtime counter after replacement | Low |
 | `reset_power_module` | Soft-reset a named power module (CAN-bus issue recovery) | Medium |
+| `trigger_message` | Force the charger to re-send a specific OCPP message (StatusNotification, MeterValues, BootNotification, etc.). Maps to OCPP `TriggerMessage` | Low (read-only) |
+| `unlock_connector` | Release a stuck connector lock. Maps to OCPP `UnlockConnector` | Medium — operator must confirm no vehicle is mid-session |
+| `clear_cache` | Clear the charger's local authorisation cache. Maps to OCPP `ClearCache` | Low |
 
-Each command would follow the existing §11.1.7 dispatch pattern (long-polling) and §11.1.8 status reporting (charger reports `accepted`, `completed`, or `failed`).
+Each command follows the existing dispatch pattern (long-polling) and status reporting (charger reports `accepted`, `completed`, or `failed`).
 
-**Why we need it.** Today, every "rebot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Adding these to the Open Platform API lets Tellus's tech team and authorised partners triage remotely, dramatically reducing time-to-resolution for soft issues.
+**Why we need it.** Today, every "reboot the charger" or "fetch logs" interaction requires an on-site engineer or a call to a partner CPMS that may or may not support the operation. Exposing these via the Open Platform API lets authorised operators triage remotely, dramatically reducing time-to-resolution for soft issues.
 
 **Status.** Pending implementation, prioritised by frequency-of-need. `reboot`, `fetch_logs`, and `force_reconnect` are highest priority. `run_self_test` and `calibrate_sensor` have safety implications and need careful design (write scope + customer authorisation + audit log).
 
 ## 3. OCPP version and CSMS message-rate metadata 🟡
 
-§13.2.2 (Get Charger Details) returns `connectedHost`, `connectedWsPort`, `connectedWebPort`, `enableConnection`, and similar connectivity fields. For partner diagnostic visibility, two additions would help.
+The Get Charger Details endpoint returns `connectedHost`, `connectedWsPort`, `connectedWebPort`, `enableConnection`, and similar connectivity fields. For partner diagnostic visibility, two additions would help.
 
 **Proposed additions to the Device entity:**
 
@@ -105,24 +102,24 @@ type Device = {
 
 ## 4. Service-account authentication for the admin API 🟡
 
-The legacy admin API at `tellus-op-admin/` requires interactive login with a captcha. This is appropriate for human users of the admin web UI, but blocks programmatic access from partner integrations and from Tellus's own tooling.
+The legacy admin API at `tellus-op-admin/` requires interactive login with a captcha. This is appropriate for human users of the admin web UI, but blocks programmatic access from partner integrations.
 
 **Proposed:**
 
 A new `service_account` credential type, with:
 
-- `service_account_id` and `service_account_secret` issued by the platform team (out-of-band)
+- `service_account_id` and `service_account_secret` issued out-of-band by Tellus
 - A long-lived token endpoint that doesn't require captcha
 - Granular scopes matching the admin API's resource model (org / site / device / firmware / configuration)
 - Audit logging on every action taken by a service account
 
-**Why we need it.** Some entities exposed by the admin API are not yet on the Open Platform API. A service-account credential lets Tellus and integration partners populate those entities into our own data spines until the Open Platform endpoints achieve parity. This is the "fallback" path described in the email-to-Peter draft.
+**Why we need it.** Some entities exposed by the admin API are not yet available on the Open Platform API. A service-account credential lets integration partners populate those entities into their own data stores until the Open Platform endpoints achieve parity.
 
-**Status.** Under discussion. The platform team has the underlying RBAC; the missing piece is the captcha-bypass authentication endpoint.
+**Status.** Under discussion. The underlying role-based access control is already in place; the captcha-bypass authentication endpoint is the missing piece.
 
 ## 5. Per-session telemetry archive query 🔵
 
-§13.2.7 (Real-time Telemetry Stream) provides a live WebSocket feed but no historical query. The Diagnostics Console reconstructs power profiles for past sessions from `max_power` / `avg_power` summary fields, which is approximate.
+The Real-time Telemetry Stream endpoint provides a live WebSocket feed but no historical query. Power profiles for past sessions can be reconstructed only from `max_power` / `avg_power` summary fields, which is approximate.
 
 **Proposed:**
 
@@ -134,7 +131,7 @@ A new endpoint `GET /v1/operator/devices/{device_id}/sessions/{record_id}/teleme
 
 ## 6. OAuth refresh-token flow 🟡
 
-The current v1.3 spec (§13.1.1) only describes the client-credentials grant — partners obtain a 24-hour Bearer token by re-exchanging `client_id` and `client_secret`. There is no refresh-token flow, no token-introspection endpoint, and no short-lived access-token / long-lived refresh-token split.
+The current authentication surface only describes the OAuth client-credentials grant — partners obtain a 24-hour Bearer token by re-exchanging `client_id` and `client_secret`. There is no refresh-token flow, no token-introspection endpoint, and no short-lived access-token / long-lived refresh-token split.
 
 For partners running large, distributed fleets of clients (e.g. multi-region BFFs, edge workers, mobile companion apps), re-exchanging `client_secret` on every refresh creates two operational concerns:
 
@@ -150,6 +147,333 @@ For partners running large, distributed fleets of clients (e.g. multi-region BFF
 
 **Status.** Under discussion. Adds complexity to the auth surface, but is the expected pattern for partners building multi-tenant or edge-distributed integrations against the API.
 
+## 7. OCPP message log 🟡
+
+The platform sees every OCPP request and response that flows between a charger and its CPMS. Today these messages are processed (telemetry stored, events surfaced) but the raw protocol traffic is not exposed as a queryable log. For diagnostic work, this is the single highest-leverage gap to close.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/ocpp-messages
+  ?device_id={uuid}
+  &connector_id={int}
+  &since={iso8601}
+  &until={iso8601}
+  &message_type={StatusNotification|MeterValues|StartTransaction|...}
+  &direction={inbound|outbound}
+  &page={int}
+  &size={int}
+```
+
+Returns the raw OCPP message stream filtered by the criteria above, with timestamp, message-ID, message-type, payload, and the corresponding response (where applicable).
+
+**Why we need it.** When a fault happens, the OCPP message log is the evidence trail. *"Charger sent StatusNotification(Faulted) with errorCode 'OtherError' at 14:32:07; CPMS replied OK; next message was 60 seconds later"* — that level of detail is what enables Anomaly Hunter, Repeat-Fault Hunter, and any meaningful runbook automation. Without it, the Diagnostics Console can show what happened in aggregate but not why.
+
+**OCPP relationship.** The messages themselves are 100% OCPP-standard (1.6-J PDUs / 2.0.1 messages). This endpoint exposes the existing traffic as a REST resource; no new charger functionality required. The log includes vendor `DataTransfer` PDUs — the OCPP envelope used for vendor-specific extensions such as component-level telemetry and pre-15118-20 bidirectional signalling — so partners gain full visibility into the proprietary protocol surface alongside the standard messages.
+
+**Status.** Under discussion. Storage and retention implications need scoping (likely tiered: full payload for 30 days, headers-only for 90, deleted thereafter).
+
+## 8. Diagnostics report request / status / download 🟢
+
+OCPP 1.6's `GetDiagnostics` and 2.0.1's `GetLog` instruct a charger to bundle its on-board logs (boot logs, fault history, config dump, firmware metadata) and upload them to a URL the platform provides. Tellus chargers already implement this — but no public endpoint currently exposes it as a first-class operation.
+
+**Proposed:**
+
+```ts
+POST /v1/operator/devices/{device_id}/diagnostics
+  // Request a diagnostic bundle; returns { report_id, status: "queued" }
+
+GET /v1/operator/diagnostics/{report_id}
+  // Status: queued | uploading | ready | failed
+  // Once ready, includes file_size, uploaded_at, expires_at
+
+GET /v1/operator/diagnostics/{report_id}/download
+  // Returns the bundle (or a signed time-limited download URL)
+```
+
+**Why we need it.** Critical for partner tech-team troubleshooting — without it, every difficult fault requires an on-site engineer with a USB cable. This is also the API surface that lets the Diagnostics Console expose a "Get Diagnostic Report" action directly from a charger view.
+
+**OCPP relationship.** Maps directly to OCPP `GetDiagnostics.req` (1.6-J) / `GetLog.req` (2.0.1). Tellus chargers already implement both.
+
+**Status.** Pending implementation. Listed as a near-term priority alongside item 2 (Remote diagnostic commands).
+
+## 9. OCPP configuration read / write 🟢
+
+OCPP exposes a key/value configuration dictionary on every charger — heartbeat interval, max-current, allow-offline-tx, connector phase-rotation, dozens of operational settings. The platform can read or write these via `GetConfiguration` / `ChangeConfiguration` (1.6) or `GetVariables` / `SetVariables` (2.0.1). Today these calls happen internally but are not exposed as a public API.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/devices/{device_id}/ocpp-config
+  // Returns full dictionary of configured keys with values, read-write flags, types
+
+GET /v1/operator/devices/{device_id}/ocpp-config/{key}
+  // Single-key read
+
+PATCH /v1/operator/devices/{device_id}/ocpp-config
+  // Body: { "HeartbeatInterval": "30", "MaxChargingCurrent": "32" }
+  // Requires write scope; should be gated behind explicit authorisation
+```
+
+**Why we need it.** Misconfiguration is the leading cause of phantom faults in EV deployments. *"Charger keeps falling off-line"* → look at OCPP config → discover `HeartbeatInterval` is 10 seconds on a flaky cellular link, fix it, problem gone. Without an API to read OCPP config, the Diagnostics Console can identify symptoms but not their configuration cause. With it, the Co-Pilot agents can point at the specific misconfigured key.
+
+**OCPP relationship.** Direct mapping to OCPP `GetConfiguration` / `ChangeConfiguration` (1.6-J) and `GetVariables` / `SetVariables` (2.0.1). All Tellus chargers already implement these.
+
+**Status.** Pending implementation. Read endpoints are low-risk; write endpoints need careful gating (write scope, audit log entry, optional approval workflow for safety-relevant keys).
+
+## 10. Alerts with state management 🟢
+
+The Intelligence agents (Anomaly Hunter, Maintenance Dispatcher, Repeat-Fault Hunter — see the [Intelligence preview](https://developers.telluspowergroup.com/api-reference#tag/operator-intelligence-preview)) can detect issues but have no persistent destination to record them in. Alerts as a managed entity with a state machine is the missing persistence layer.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/alerts
+  ?device_id={uuid}
+  &site_id={uuid}
+  &severity={low|medium|high|critical}
+  &status={open|acknowledged|resolved|dismissed}
+  &since={iso8601}
+  &page={int}
+
+GET /v1/operator/alerts/{alert_id}
+  // Detail including the originating agent, evidence (linked OCPP messages, telemetry window), suggested runbook
+
+PATCH /v1/operator/alerts/{alert_id}
+  // Body: { "status": "acknowledged", "note": "..." }
+  // Lifecycle: open → acknowledged → resolved | dismissed
+```
+
+**Why we need it.** Closes the loop between detection and action. Agents and rules create alerts; operators triage them; alerts are marked resolved or dismissed. Without this persistence layer, the AI agents are read-only — they can show findings on screen but nothing persists across sessions or operators.
+
+**Status.** Pending implementation. Depends on item 7 (OCPP messages) for the evidence-linking on each alert detail.
+
+## 11. Audit logs 🟡
+
+Who-did-what record of every administrative action on the platform: configuration changes (writes via §9), commands issued (start, stop, reboot, get-diagnostics), alert state transitions, user logins, token issuance, service-account actions.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/audit-logs
+  ?actor={user_id_or_service_account_id}
+  &resource_type={device|config|alert|user}
+  &resource_id={uuid}
+  &action={create|update|delete|execute_command}
+  &since={iso8601}
+  &page={int}
+```
+
+**Why we need it.** *"Was anything changed on the charger before it started faulting?"* is one of the most common diagnostic questions. Audit logs are how you answer it. Also a hard requirement for ISO 27001 / SOC 2 and enterprise customer security reviews.
+
+**Status.** Under discussion. Retention period and storage location are part of the broader data-residency design and will be decided alongside it.
+
+## 12. Raw meter values log 🟡
+
+OCPP `MeterValues` PDUs carry the periodic readings — voltage, current, power, energy, SoC, frequency — that chargers emit during sessions, typically every 5–60 seconds. We already aggregate these into `/v1/operator/aggregated/energy` (downsampled time-series) and stream them via the WebSocket telemetry feed (real-time). What is missing is the **raw, queryable log** — the original `MeterValues` records with all sampled value types preserved.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/meter-values
+  ?device_id={uuid}
+  &connector_id={int}
+  &session_id={uuid}
+  &since={iso8601}
+  &until={iso8601}
+  &measurand={Voltage|Current.Import|Power.Active.Import|SoC|Energy.Active.Import.Register|...}
+  &page={int}
+```
+
+Returns the raw `MeterValues` records with full per-sample fidelity (typically one reading every 5–60s, depending on charger configuration). Distinct from aggregated energy and from the realtime WebSocket — this is the historical forensic record.
+
+**Why we need it.** Diagnostic value is strongest immediately after a fault. *"Show me the voltage trace for the 10 seconds before F-0411 fired"* turns guesswork into data. Currently only aggregated profiles are available, not raw sample-level traces. This generalises item 5 (per-session telemetry archive) to "any meter value, any time window, any device" rather than scoping to a single session.
+
+**OCPP relationship.** `MeterValues` is a core OCPP PDU emitted by every charger during a session. The endpoint exposes the persisted record of those PDUs.
+
+**Status.** Under discussion. Storage implications are non-trivial — likely the same tiered retention as item 7 (full fidelity for 30 days, downsampled thereafter).
+
+## 13. Extended device metadata 🟡
+
+The current `Device` object exposes the live operational fields — serial number, model, firmware version, connectivity status — but does not surface the broader catalogue, lifecycle and connectivity-quality metadata that partner consoles and tech-team users expect to see when looking at a single charger.
+
+**Proposed addition to the `Device` object:**
+
+```ts
+type Device = {
+  // ... existing fields ...
+
+  product: {
+    brand: string;                  // e.g. "Tellus Power"
+    product_name: string;           // e.g. "MaxiCharger AC Pro"
+    rated_power_kw: number;
+    current_type: 'AC' | 'DC';
+    phases: 1 | 3;
+    screen_resolution?: string;     // e.g. "800x480"
+    screen_size_inches?: number;
+    connector_types: string[];      // e.g. ["CCS2", "Type 2"]
+    ip_rating?: string;
+  };
+
+  connectivity: {
+    type: 'cellular' | 'wifi' | 'ethernet';
+    signal_strength_dbm?: number;   // cellular / wifi RSSI
+    mac_address?: string;
+    imei?: string;                  // cellular models only
+    last_heartbeat_at: string;
+  };
+
+  lifecycle: {
+    activation_status: 'activated' | 'suspended' | 'decommissioned';
+    activation_date?: string;
+    usage_duration_days?: number;   // derived from activation_date
+    warranty_expires_at?: string;
+    manufacturing_batch?: string;
+  };
+};
+```
+
+**Why we need it.** A complete device profile is the natural landing surface for a charger detail page — partner tech teams expect to see warranty status, manufacturing batch (for fault correlation across cohorts), connectivity quality, and the marketing-friendly product name in one view. The data exists across multiple internal systems already; surfacing it as a single API response is a data-aggregation exercise rather than a charger-firmware change.
+
+**OCPP relationship.** Some fields are OCPP-standard (model, firmware version, connector types reported at BootNotification); others are vendor PDUs (MAC, IMEI, signal strength typically via `DataTransfer`); the rest are platform-side metadata (warranty, activation, brand, product name) from internal product-catalogue and CRM systems.
+
+**Status.** Under discussion. Field set is broadly agreed; the design conversation is about which fields are returned by default vs. behind a `?include=` parameter, and how product-catalogue data is kept consistent across regions.
+
+## 14. Local authorisation list 🟡
+
+Chargers can authorise an RFID/idTag in two ways: by asking the platform live (`Authorize` OCPP call), or by checking a locally-stored list of allowed tags. The local list is what keeps a charger working when the network drops — for fleet operators with depot-style sites, this is operationally essential.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/devices/{device_id}/local-list
+  // Returns the current local-list version and entry count.
+
+PUT /v1/operator/devices/{device_id}/local-list
+  // Replaces the entire local list. Body: { entries: IdTagEntry[] }.
+  // Maps to OCPP SendLocalList with updateType="Full".
+
+PATCH /v1/operator/devices/{device_id}/local-list
+  // Adds / updates / removes entries incrementally.
+  // Maps to OCPP SendLocalList with updateType="Differential".
+```
+
+Plus a charger-side callback the platform handles when a charger asks *"is this idTag valid?"*:
+
+```ts
+POST /v1/device/authorize
+  // Charger → platform: { id_tag: "RFID_HEX" }
+  // Platform → charger: { status: "Accepted" | "Blocked" | "Expired" | ... }
+```
+
+**Why we need it.** Resilient fleet operation. *"Driver swiped their RFID, charger says network is unreachable"* — without a local list, the session fails. With it, the charger authorises against the cached list and the session proceeds. Also enables driver-level diagnostics: *"why was this driver denied?"* becomes a queryable question.
+
+**OCPP relationship.** Direct mapping to OCPP `GetLocalListVersion` / `SendLocalList` (1.6-J) and `Authorize` callback. All Tellus chargers already implement these.
+
+**Status.** Under discussion. Design choices remaining: list-size limits per charger, multi-network shared lists, and the relationship with central driver / IdTag management.
+
+## 15. Smart charging — full surface 🟡
+
+The current API surfaces charging schedules via a single `schedule` endpoint. OCPP defines a richer model — charging profiles with priority stacking, composite-schedule queries, and per-purpose profile types (TxDefaultProfile / TxProfile / ChargePointMaxProfile). Surfacing these is required for accurate diagnostics of *"why is this charger only delivering 6 kW when its rating is 22?"*.
+
+**Proposed:**
+
+```ts
+POST /v1/operator/devices/{device_id}/connectors/{connector_id}/charging-profile
+  // Apply a charging profile. Maps to OCPP SetChargingProfile.
+  // Body specifies profile_purpose, profile_kind, charging_schedule, valid_from/to, stack_level.
+
+DELETE /v1/operator/devices/{device_id}/connectors/{connector_id}/charging-profile/{profile_id}
+  // Remove a specific profile. Maps to OCPP ClearChargingProfile.
+
+GET /v1/operator/devices/{device_id}/connectors/{connector_id}/composite-schedule
+  ?duration_seconds={int}
+  // Query the resolved composite schedule (the actual power curve the charger
+  // will deliver, after stacking all active profiles). Maps to OCPP GetCompositeSchedule.
+```
+
+**Why we need it.** Two reasons. First, **diagnostic**: without composite-schedule visibility, *"why is this charger throttled?"* is unanswerable from the API. Second, **operational**: full smart-charging is what enables Tellus to deliver against grid-services and flexibility-aggregation contracts (the Stellantis / Simtricity pilot relies on this surface).
+
+**OCPP relationship.** Direct mapping to OCPP `SetChargingProfile` / `ClearChargingProfile` / `GetCompositeSchedule` (1.6-J) and the equivalent 2.0.1 messages.
+
+**Status.** Under discussion. The schedule endpoint already exists in a simplified form; this proposal expands it to the full OCPP smart-charging surface.
+
+## 16. OCPP 2.0.1 features — public-charging suite 🔵
+
+OCPP 2.0.1 introduces several capabilities beyond 1.6-J that are oriented around public charging — dynamic tariff display, real-time cost accumulation, driver messaging on the charger's screen, and a much richer device-model query surface. These are valuable but not strategic-priority for Tellus's current customer base; flagged here for partner visibility.
+
+**Proposed clusters:**
+
+- **Device Model / Variables query** — `GET /v1/operator/devices/{device_id}/variables` returns the full machine-readable catalogue of every variable the charger exposes, with types, units, ranges and read-write flags. Replaces 1.6's flat `GetConfiguration` with structured metadata that the Console can use to auto-generate configuration UI.
+- **Display Message push** — `POST /v1/operator/devices/{device_id}/display-message` pushes a message to the charger's on-board screen ("Discharge in progress — please do not unplug", "Welcome, John", etc.).
+- **Tariff push** — `POST /v1/operator/devices/{device_id}/tariff` sends a structured tariff for display to drivers.
+- **Cost accumulation** — `GET /v1/operator/sessions/{session_id}/cost` returns the real-time cost of an in-progress session.
+- **Security profile 3** — endpoints for managing the charger's TLS certificates to support mutual-TLS OCPP transport (`InstallCertificate`, `DeleteCertificate`, `GetInstalledCertificateIds`).
+
+**Why we need it.** Forward-looking. Useful for partners building consumer-facing public-charging experiences on top of Tellus hardware.
+
+**OCPP relationship.** All native OCPP 2.0.1 operations. Tellus firmware 260420.0107 already supports OCPP 2.0.1.
+
+**Status.** Exploratory. Schedule depends on customer demand for OCPP 2.0.1 features over OCPP 1.6-J.
+
+## 17. Plug & Charge (PnC) — OCPP 2.0.1 + ISO 15118 🟡
+
+Plug & Charge is the vehicle-to-charger authentication mechanism defined in ISO 15118-2 and 15118-20, integrated into OCPP 2.0.1 via `Authorize` with `idTokenType: "eMAID"`. The vehicle presents a contract certificate; the charger validates it against a root CA list; the session starts without RFID, app, or driver action. Stellantis premium models and most modern BMWs / Mercedes EVs support PnC.
+
+**Proposed:**
+
+```ts
+POST /v1/operator/devices/{device_id}/contract-certificates
+  // Install a contract-certificate root (CA) on the charger for PnC validation.
+
+DELETE /v1/operator/devices/{device_id}/contract-certificates/{cert_id}
+  // Remove an installed root.
+
+GET /v1/operator/devices/{device_id}/pnc-status
+  // Returns: PnC enabled, contract-cert roots installed, last successful PnC session.
+
+POST /v1/operator/sessions/{session_id}/authorize-pnc
+  // Optional: explicit re-auth call during a session.
+```
+
+**Why we need it.** PnC is part of the premium V2X experience — the difference between "tap your card to start" and "plug in, wait two seconds, you're charging". Stellantis premium models depend on it. Tellus's V2G positioning is meaningfully weakened without it.
+
+**OCPP relationship.** OCPP 2.0.1 `Authorize` with eMAID + `InstallCertificate` / `DeleteCertificate` / `GetInstalledCertificateIds` for the certificate-management surface. ISO 15118-2 / 15118-20 for the vehicle-side. Tellus firmware supports both.
+
+**Status.** Under discussion. Required for the Stellantis premium-model use case; scoping conversation focuses on certificate-root management and the relationship with central driver records.
+
+## 18. ISO 15118-20 bidirectional power transfer 🟢
+
+The core V2X / V2G capability. Tellus firmware 260420.0107 already supports ISO 15118-20 with full bidirectional power transfer (BPT), along with pre-15118-20 bidirectional extensions used in the Stellantis / Free2move DrossOne integration. The current API surfaces a single `discharge` command but does not expose the richer state — negotiated discharge power profile, mid-session schedule renegotiation, vehicle-reported BPT capability, or the granular session-state machine.
+
+**Proposed:**
+
+```ts
+GET /v1/operator/devices/{device_id}/connectors/{connector_id}/v2g/capability
+  // What bidirectional profiles do this charger and the currently-connected vehicle support?
+
+POST /v1/operator/devices/{device_id}/connectors/{connector_id}/v2g/start
+  // Begin a bidirectional session with a specified target discharge curve.
+  // Body: { mode: 'BPT_DC' | 'BPT_AC' | 'V2H' | 'V2G', target_curve: PowerPoint[], min_soc: number }
+
+POST /v1/operator/devices/{device_id}/connectors/{connector_id}/v2g/renegotiate
+  // Renegotiate the active discharge curve mid-session — used when grid signals change.
+
+POST /v1/operator/devices/{device_id}/connectors/{connector_id}/v2g/stop
+  // End a bidirectional session cleanly.
+
+GET /v1/operator/devices/{device_id}/connectors/{connector_id}/v2g/status
+  // Detailed BPT state: negotiated_curve, actual_power, vehicle_soc, vehicle_min_soc, contactor_state, isolation_test_status, harmonics, last_renegotiation.
+```
+
+Plus a charger-side telemetry extension for V2G-specific fields surfaced over the existing telemetry stream.
+
+**Why we need it.** This is the differentiator. Tellus's V2G hardware is in the market today; the API surface needs to do justice to it. Damon (Simtricity) is building flex-aggregation revenue on top of Tellus chargers right now; Stellantis is expanding the pilot; any partner conversation about V2G will inevitably ask *"show me the API"*. A first-class V2G endpoint cluster — separate from generic remote-control — is how Tellus's positioning translates into developer-visible reality.
+
+**OCPP relationship.** ISO 15118-20 for the vehicle-to-charger negotiation; OCPP 2.0.1 `NotifyEVChargingSchedule` and related messages for the charger-to-platform side; pre-15118-20 bidirectional extensions for legacy vehicle compatibility. All supported in firmware.
+
+**Status.** Pending implementation. Aligned with the Stellantis pilot timeline.
+
 ## How partners can influence priorities
 
-If your integration would benefit from any of these extensions — or if there's a gap on this page that we haven't identified — please contact [support@telluspowergroup.com](mailto:support@telluspowergroup.com). Demand from real integrations is the strongest signal for the platform team's prioritisation.
+If your integration would benefit from any of these extensions — or if there's a gap on this page that we haven't identified — please contact [support@telluspowergroup.com](mailto:support@telluspowergroup.com). Partner demand is the strongest signal for our prioritisation.
